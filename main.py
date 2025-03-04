@@ -29,6 +29,7 @@ with open(PLUGIN_DIR + "/mania.json", "r", encoding="utf-8") as f:
 @register("astrbot_plugin_TRPG", "shiroling", "TRPG玩家用骰", "1.0.1")
 class DicePlugin(Star):
     def __init__(self, context: Context):
+        DEFAULT_DICE = 100
         super().__init__(context)
 
     def _roll_dice(self, dice_count, dice_faces):
