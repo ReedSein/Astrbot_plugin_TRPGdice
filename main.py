@@ -26,10 +26,9 @@ with open(PLUGIN_DIR + "/phobias.json", "r", encoding="utf-8") as f:
 with open(PLUGIN_DIR + "/mania.json", "r", encoding="utf-8") as f:
     manias = json.load(f)["manias"]
     
-@register("astrbot_plugin_TRPG", "shiroling", "TRPG玩家用骰", "1.0.1")
+@register("astrbot_plugin_TRPG", "shiroling", "TRPG玩家用骰", "1.0.2")
 class DicePlugin(Star):
     def __init__(self, context: Context):
-        DEFAULT_DICE = 100
         super().__init__(context)
 
     def _roll_dice(self, dice_count, dice_faces):
@@ -55,7 +54,7 @@ class DicePlugin(Star):
         return base_roll
 
     def _parse_dice_expression(self, expression):
-        """解析骰子表达式"""
+        """解析骰子表达式，支持常数加减乘"""
         expression = expression.replace("x", "*").replace("X", "*")
 
         match_repeat = re.match(r"(\d+)?#(.+)", expression)
@@ -78,7 +77,7 @@ class DicePlugin(Star):
 
         for _ in range(roll_times):
             parts = re.split(r"([+\-*])", expression)
-            total = 0
+            total = None 
             part_results = []
             calculation_expression = ""
 
@@ -86,32 +85,35 @@ class DicePlugin(Star):
                 expr = parts[i].strip()
                 operator = parts[i - 1] if i > 0 else "+"
 
-                match = re.match(r"(\d*)d(\d+)(k\d+)?([+\-*]\d+)?", expr)
+                if expr.isdigit():
+                    subtotal = int(expr)
+                    rolls = [subtotal]
+                else:
+                    match = re.match(r"(\d*)d(\d+)(k\d+)?([+\-*]\d+)?", expr)
+                    if not match:
+                        return None, f"格式错误 `{expr}`"
 
-                if not match:
-                    return None, f"格式错误 `{expr}`"
+                    dice_count = int(match.group(1)) if match.group(1) else 1
+                    dice_faces = int(match.group(2))
+                    keep_highest = int(match.group(3)[1:]) if match.group(3) else dice_count
+                    modifier = match.group(4)
 
-                dice_count = int(match.group(1)) if match.group(1) else 1
-                dice_faces = int(match.group(2))
-                keep_highest = int(match.group(3)[1:]) if match.group(3) else dice_count
-                modifier = match.group(4)
+                    if not (1 <= dice_count <= 100 and 1 <= dice_faces <= 1000):
+                        return None, "骰子个数范围 1-100，面数范围 1-1000，否则非法！"
 
-                if not (1 <= dice_count <= 100 and 1 <= dice_faces <= 1000):
-                    return None, "骰子个数范围 1-100，面数范围 1-1000，否则非法！"
+                    rolls = self._roll_dice(dice_count, dice_faces)
+                    sorted_rolls = sorted(rolls, reverse=True)
+                    selected_rolls = sorted_rolls[:keep_highest]
 
-                rolls = self._roll_dice(dice_count, dice_faces)
-                sorted_rolls = sorted(rolls, reverse=True)
-                selected_rolls = sorted_rolls[:keep_highest]
+                    subtotal = sum(selected_rolls)
 
-                subtotal = sum(selected_rolls)
+                    if modifier:
+                        try:
+                            subtotal = eval(f"{subtotal}{modifier}")
+                        except:
+                            return None, f"修正值 `{modifier}` 无效！"
 
-                if modifier:
-                    try:
-                        subtotal = eval(f"{subtotal}{modifier}")
-                    except:
-                        return None, f"修正值 `{modifier}` 无效！"
-
-                if i == 0:
+                if total is None:
                     total = subtotal
                     calculation_expression = f"{subtotal}"
                 else:
@@ -122,13 +124,11 @@ class DicePlugin(Star):
                         total -= subtotal
                     elif operator == "*":
                         total *= subtotal
-
                 if i == 0:
                     part_results.append(f"[{' + '.join(map(str, rolls))}]")
                 else:
                     part_results.append(f" {operator} [{' + '.join(map(str, rolls))}]")
 
-            # 处理奖励骰 / 惩罚骰
             if bonus_dice > 0 or penalty_dice > 0:
                 base_roll = random.randint(1, 100)
                 final_roll = self._roll_coc_bonus_penalty(base_roll, bonus_dice, penalty_dice)
@@ -141,7 +141,7 @@ class DicePlugin(Star):
     @filter.command("r")
     async def handle_roll_dice(self, event: AstrMessageEvent, message: str = None):
         """普通掷骰"""
-        message = message.strip() if message else f"1d{self.DEFAULT_DICE}"
+        message = message.strip() if message else f"1d{DEFAULT_DICE}"
 
         total, result_message = self._parse_dice_expression(message)
         if total is None:
@@ -293,8 +293,8 @@ class DicePlugin(Star):
         yield event.plain_result(f"✅ 你已切换到人物卡 **{name}**！")
 
     @st.command("update")
-    async def update_character(self, event: AstrMessageEvent, attribute: str, value: int):
-        """更新当前选中的人物卡"""
+    async def update_character(self, event: AstrMessageEvent, attribute: str, value: str):
+        """更新当前选中的人物卡，支持公式和掷骰计算"""
         user_id = event.get_sender_id()
         chara_id = self.get_current_character_id(user_id)
 
@@ -303,10 +303,46 @@ class DicePlugin(Star):
             return
 
         chara_data = self.load_character(user_id, chara_id)
-        chara_data["attributes"][attribute] = value
+
+        if attribute not in chara_data["attributes"]:
+            yield event.plain_result(f"⚠️ 属性 `{attribute}` 不存在！请检查拼写。")
+            return
+
+        current_value = chara_data["attributes"][attribute]
+
+        match = re.match(r"([+\-*]?)(\d*)d?(\d*)", value)
+        if not match:
+            yield event.plain_result(f"⚠️ `{value}` 格式错误！请使用 `.st 属性+数值` 或 `.st 属性-1d6`")
+            return
+
+        operator = match.group(1)  # `+` / `-` / `*`
+        dice_count = int(match.group(2)) if match.group(2) else 1
+        dice_faces = int(match.group(3)) if match.group(3) else 0
+
+        if dice_faces > 0:
+            rolls = [random.randint(1, dice_faces) for _ in range(dice_count)]
+            value_num = sum(rolls)
+            roll_detail = f"🎲 掷骰结果: [{' + '.join(map(str, rolls))}] = {value_num}"
+        else:
+            value_num = int(match.group(2)) if match.group(2) else 0
+            roll_detail = ""
+
+        if operator == "+":
+            new_value = current_value + value_num
+        elif operator == "-":
+            new_value = current_value - value_num
+        elif operator == "*":
+            new_value = current_value * value_num
+        else:
+            new_value = value_num
+
+        chara_data["attributes"][attribute] = max(0, new_value)
         self.save_character(user_id, chara_id, chara_data)
 
-        yield event.plain_result(f"✅ {attribute} 已更新为 {value}！")
+        response = f"✅ `{attribute}` 变更: {current_value} → {new_value}"
+        if roll_detail:
+            response += f"\n{roll_detail}"
+        yield event.plain_result(response)
 
     @st.command("delete")
     async def delete_character(self, event: AstrMessageEvent, name: str):
@@ -638,7 +674,7 @@ class DicePlugin(Star):
         "`/st show` - 显示当前人物卡\n"
         "`/st list` - 列出所有人物卡\n"
         "`/st change 名称` - 切换当前人物卡\n"
-        "`/st update 属性 值` - 更新人物卡属性\n"
+        "`/st update 属性 值/公式` - 更新人物卡属性\n"
         "`/st delete 名称` - 删除人物卡\n\n"
         
         "CoC 相关\n"
