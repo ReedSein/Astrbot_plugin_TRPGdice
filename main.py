@@ -26,7 +26,7 @@ with open(PLUGIN_DIR + "/phobias.json", "r", encoding="utf-8") as f:
 with open(PLUGIN_DIR + "/mania.json", "r", encoding="utf-8") as f:
     manias = json.load(f)["manias"]
     
-@register("astrbot_plugin_TRPG", "shiroling", "TRPG玩家用骰", "1.0.2")
+@register("astrbot_plugin_TRPG", "shiroling", "TRPG玩家用骰", "1.0.3")
 class DicePlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
@@ -148,6 +148,34 @@ class DicePlugin(Star):
             yield event.plain_result(result_message)
         else:
             yield event.plain_result(result_message)
+            
+    @filter.command("rh")
+    async def roll_hidden(self, event: AstrMessageEvent, message : str = None):
+        """私聊发送掷骰结果"""
+        sender_id = event.get_sender_id()
+        message = message.strip() if message else f"1d{DEFAULT_DICE}"
+
+        total, result_message = self._parse_dice_expression(message)
+        if total is None:
+            private_msg = f"⚠️ {result_message}"
+        else:
+            private_msg = f"🎲 私骰结果: {result_message}"
+
+        client = event.bot  # 获取机器人 Client
+        payloads = {
+            "user_id": sender_id,
+            "message": [
+                {
+                    "type": "text",
+                    "data": {
+                        "text": private_msg
+                    }
+                }
+            ]
+        }
+
+        ret = await client.api.call_action("send_private_msg", **payloads)
+        # logger.info(f"send_private_msg: {ret}")
 
 
     # ============================================================== #
@@ -240,6 +268,8 @@ class DicePlugin(Star):
 
         matches = re.findall(r"([\u4e00-\u9fa5a-zA-Z]+)(\d+)", attributes)
         chara_data = {"id": chara_id, "name": name, "attributes": {attr: int(value) for attr, value in matches}}
+        chara_data['attributes']['max_hp'] = chara_data['attributes'].get('hp', 0)
+        chara_data['attributes']['max_san'] = chara_data['attributes'].get('san', 0)
 
         self.save_character(user_id, chara_id, chara_data)
 
@@ -358,6 +388,37 @@ class DicePlugin(Star):
         os.remove(path)
 
         yield event.plain_result(f"🗑️ 人物卡 **{name}** 已删除！")
+        
+    @filter.command("sn")
+    async def set_nickname(self, event: AstrMessageEvent):
+        """修改群成员名片"""
+        if event.get_platform_name() == "aiocqhttp":
+            from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
+            assert isinstance(event, AiocqhttpMessageEvent)
+
+            client = event.bot
+            user_id = event.get_sender_id()
+            group_id = event.get_group_id()
+
+            chara_id = self.get_current_character_id(user_id)
+            chara_data = self.load_character(user_id, chara_id)
+            
+            if not chara_data:
+                yield event.plain_result(f"⚠️ 人物卡 (ID: {chara_id}) 不存在！")
+                return
+
+            name, hp, max_hp, san, max_san = chara_data['name'], chara_data['attributes'].get('hp', 0), chara_data['attributes'].get('max_hp', 0), chara_data['attributes'].get('san', 0), chara_data['attributes'].get('max_san', 0)
+            new_card = f"{name} HP:{hp}/{max_hp} SAN:{san}/{max_san}"
+
+            payloads = {
+                "group_id": group_id,
+                "user_id": user_id,
+                "card": new_card
+            }
+
+            ret = await client.api.call_action("set_group_card", **payloads)
+            yield event.plain_result(f"已修改人物名！")
+            # logger.info(f"set_group_card: {ret}")
     
     # ========================================================= #
     @filter.command("ra")
