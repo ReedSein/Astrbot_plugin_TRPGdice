@@ -21,112 +21,24 @@ HELP_HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap');
-
-        body {
-            margin: 0;
-            padding: 20px;
-            background-color: transparent;
-            font-family: 'Noto Serif SC', 'Songti SC', 'SimSun', serif; /* 衬线字体营造古典感 */
-        }
-
+        body { margin: 0; padding: 20px; background-color: transparent; font-family: 'Noto Serif SC', 'Songti SC', serif; }
         .parchment {
-            background-color: #f3e5ce; /* 羊皮纸底色 */
-            background-image: 
-                radial-gradient(circle at center, #f8f1e0 0%, #f3e5ce 80%, #e6d2b0 100%); /* 伪光照效果 */
-            padding: 40px;
-            border: 8px double #5c4033; /* 深褐色双实线边框 */
-            border-radius: 4px;
-            box-shadow: 10px 10px 20px rgba(0,0,0,0.3);
-            width: 500px; /* 固定宽度 */
-            color: #43302b; /* 深咖啡色文字 */
-            position: relative;
+            background-color: #f3e5ce;
+            background-image: radial-gradient(circle at center, #f8f1e0 0%, #f3e5ce 80%, #e6d2b0 100%);
+            padding: 40px; border: 8px double #5c4033; border-radius: 4px;
+            box-shadow: 10px 10px 20px rgba(0,0,0,0.3); width: 500px; color: #43302b; position: relative;
         }
-
-        /* 装饰性边角 */
-        .parchment::before {
-            content: "";
-            position: absolute;
-            top: 5px; left: 5px; right: 5px; bottom: 5px;
-            border: 2px solid #a89f91;
-            pointer-events: none;
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            border-bottom: 2px solid #5c4033;
-            padding-bottom: 15px;
-        }
-
-        .title {
-            font-size: 32px;
-            font-weight: bold;
-            letter-spacing: 5px;
-            margin: 0;
-            text-shadow: 1px 1px 0px rgba(255,255,255,0.5);
-        }
-
-        .subtitle {
-            font-size: 14px;
-            font-style: italic;
-            color: #7a6256;
-            margin-top: 5px;
-        }
-
-        .section {
-            margin-bottom: 25px;
-        }
-
-        .section-title {
-            font-size: 18px;
-            font-weight: bold;
-            background-color: #5c4033;
-            color: #f3e5ce;
-            padding: 4px 10px;
-            display: inline-block;
-            border-radius: 2px;
-            margin-bottom: 10px;
-            box-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-        }
-
-        .command-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        .command-item {
-            margin-bottom: 8px;
-            display: flex;
-            align-items: baseline;
-            border-bottom: 1px dashed #d1c0a5; /* 虚线分割 */
-            padding-bottom: 4px;
-        }
-
-        .cmd {
-            font-family: 'Consolas', 'Courier New', monospace;
-            font-weight: bold;
-            color: #8b0000; /* 深红色指令 */
-            margin-right: 10px;
-            font-size: 16px;
-            white-space: nowrap;
-        }
-
-        .desc {
-            font-size: 14px;
-            color: #43302b;
-            line-height: 1.4;
-        }
-
-        .footer {
-            text-align: center;
-            margin-top: 30px;
-            font-size: 12px;
-            color: #8c7b70;
-            font-style: italic;
-            border-top: 1px solid #a89f91;
-            padding-top: 10px;
-        }
+        .parchment::before { content: ""; position: absolute; top: 5px; left: 5px; right: 5px; bottom: 5px; border: 2px solid #a89f91; pointer-events: none; }
+        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #5c4033; padding-bottom: 15px; }
+        .title { font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 0; text-shadow: 1px 1px 0px rgba(255,255,255,0.5); }
+        .subtitle { font-size: 14px; font-style: italic; color: #7a6256; margin-top: 5px; }
+        .section { margin-bottom: 25px; }
+        .section-title { font-size: 18px; font-weight: bold; background-color: #5c4033; color: #f3e5ce; padding: 4px 10px; display: inline-block; border-radius: 2px; margin-bottom: 10px; box-shadow: 2px 2px 4px rgba(0,0,0,0.2); }
+        .command-list { list-style: none; padding: 0; margin: 0; }
+        .command-item { margin-bottom: 8px; display: flex; align-items: baseline; border-bottom: 1px dashed #d1c0a5; padding-bottom: 4px; }
+        .cmd { font-family: 'Consolas', 'Courier New', monospace; font-weight: bold; color: #8b0000; margin-right: 10px; font-size: 16px; white-space: nowrap; }
+        .desc { font-size: 14px; color: #43302b; line-height: 1.4; }
+        .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #8c7b70; font-style: italic; border-top: 1px solid #a89f91; padding-top: 10px; }
     </style>
 </head>
 <body>
@@ -135,31 +47,23 @@ HELP_HTML_TEMPLATE = """
             <h1 class="title">调查员指南</h1>
             <div class="subtitle">Investigator's Handbook</div>
         </div>
-
         {% for section in sections %}
         <div class="section">
             <div class="section-title">{{ section.title }}</div>
             <ul class="command-list">
                 {% for cmd in section.commands %}
-                <li class="command-item">
-                    <span class="cmd">{{ cmd.syntax }}</span>
-                    <span class="desc">{{ cmd.desc }}</span>
-                </li>
+                <li class="command-item"><span class="cmd">{{ cmd.syntax }}</span><span class="desc">{{ cmd.desc }}</span></li>
                 {% endfor %}
             </ul>
         </div>
         {% endfor %}
-
-        <div class="footer">
-            Designed for TRPG Players · AstrBot Plugin<br>
-            "May the dice be ever in your favor."
-        </div>
+        <div class="footer">Designed for TRPG Players · AstrBot Plugin<br>"May the dice be ever in your favor."</div>
     </div>
 </body>
 </html>
 """
 
-@register("astrbot_plugin_TRPG", "shiroling", "TRPG玩家用骰 (Refactored)", "1.2.1")
+@register("astrbot_plugin_TRPG", "shiroling", "TRPG玩家用骰 (Refactored)", "1.2.2")
 class DicePlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -262,62 +166,46 @@ class DicePlugin(Star):
         return [self._roll_single(faces) for _ in range(count)]
 
     def _roll_coc_bonus_penalty(self, base_roll, bonus_dice=0, penalty_dice=0):
+        # ... 原有逻辑保持不变 ...
         tens = base_roll // 10
         ones = base_roll % 10
         if ones == 0: ones = 10 
-        
         extra_dice_count = max(bonus_dice, penalty_dice)
-        if extra_dice_count == 0:
-            return base_roll
-            
+        if extra_dice_count == 0: return base_roll
         results = [base_roll]
         current_ones = (base_roll - 1) % 10 + 1 
-        
         for _ in range(extra_dice_count):
             new_tens = random.randint(0, 9)
             new_val = new_tens * 10 + current_ones
             if new_val == 0: new_val = 100 
             results.append(new_val)
-            
-        if bonus_dice > 0:
-            return min(results)
-        else:
-            return max(results)
+        if bonus_dice > 0: return min(results)
+        else: return max(results)
 
     def _safe_parse_dice(self, expression: str) -> Tuple[Optional[int], str]:
         expression = expression.lower().replace(" ", "")
         if not re.match(r"^[0-9d+\-*k]+$", expression):
             return None, "表达式含有非法字符"
-            
         safe_expr = expression.replace("-", "+-")
         parts = safe_expr.split("+")
-        
         total = 0
         details = []
-        
         try:
             for part in parts:
                 if not part: continue
-                
                 sign = 1
                 if part.startswith("-"):
                     sign = -1
                     part = part[1:]
-                
                 if "d" in part:
                     match = re.match(r"^(\d*)d(\d+)(?:k(\d+))?$", part)
-                    if not match:
-                        return None, f"无法解析骰子部分: {part}"
-                        
+                    if not match: return None, f"无法解析骰子部分: {part}"
                     count_str, faces_str, keep_str = match.groups()
                     count = int(count_str) if count_str else 1
                     faces = int(faces_str)
-                    
                     if count > self.config.get("max_dice_count", 50):
                         return None, f"骰子数量过多 (上限 {self.config.get('max_dice_count', 50)})"
-                    
                     rolls = self._roll_multi(count, faces)
-                    
                     if keep_str:
                         keep = int(keep_str)
                         selected = sorted(rolls, reverse=True)[:keep]
@@ -326,32 +214,24 @@ class DicePlugin(Star):
                     else:
                         subtotal = sum(rolls)
                         details.append(f"[{'+'.join(map(str, rolls))}]")
-                    
                     total += subtotal * sign
-                    
                 else:
                     if "*" in part:
                         factors = part.split("*")
                         sub_prod = 1
-                        for f in factors:
-                            sub_prod *= int(f)
+                        for f in factors: sub_prod *= int(f)
                         total += sub_prod * sign
                         details.append(str(sub_prod))
                     else:
                         val = int(part)
                         total += val * sign
                         details.append(str(val))
-                        
-        except Exception as e:
-            return None, f"计算错误: {str(e)}"
-
+        except Exception as e: return None, f"计算错误: {str(e)}"
         expr_str = " + ".join(details).replace("+ -", "- ")
         return total, f"{expr_str} = {total}"
 
     def _get_flavor_text(self, result_type: str) -> str:
-        if not self.config.get("enable_flavor_text", True):
-            return ""
-            
+        if not self.config.get("enable_flavor_text", True): return ""
         key_map = {
             "🎉 大成功": "flavor_critical_success",
             "✨ 极难成功": "flavor_extreme_success",
@@ -360,80 +240,54 @@ class DicePlugin(Star):
             "❌ 失败": "flavor_failure",
             "💀 大失败": "flavor_fumble"
         }
-        
         config_key = key_map.get(result_type)
-        if not config_key:
-            return ""
-            
+        if not config_key: return ""
         texts = self.config.get(config_key, [])
-        if not texts:
-            return ""
+        if not texts: return ""
         return random.choice(texts)
 
     def _check_result(self, total: int, target: int) -> str:
         if target <= 0: return "未知"
-        
         result_str = ""
-        # CoC 7th 规则大致判定
-        if total == 1:
-            result_str = "🎉 大成功"
-        elif total <= target // 5:
-            result_str = "✨ 极难成功"
-        elif total <= target // 2:
-            result_str = "✔ 困难成功"
-        elif total <= target:
-            result_str = "✅ 成功"
-        elif total == 100:
-            result_str = "💀 大失败"
-        elif total >= 96 and target < 50:
-             result_str = "💀 大失败"
-        else:
-            result_str = "❌ 失败"
-            
+        if total == 1: result_str = "🎉 大成功"
+        elif total <= target // 5: result_str = "✨ 极难成功"
+        elif total <= target // 2: result_str = "✔ 困难成功"
+        elif total <= target: result_str = "✅ 成功"
+        elif total == 100: result_str = "💀 大失败"
+        elif total >= 96 and target < 50: result_str = "💀 大失败"
+        else: result_str = "❌ 失败"
         flavor = self._get_flavor_text(result_str)
-        if flavor:
-            return f"{result_str}\n> {flavor}"
+        if flavor: return f"{result_str}\n> {flavor}"
         return result_str
 
-    # ================= 指令处理 Handlers =================
+    # ================= 指令处理 Handlers (修复参数问题) =================
 
     @filter.command("roll", alias={"r", "掷骰"})
     async def roll_dice(self, event: AstrMessageEvent, expression: str = None, target: int = None):
         """普通掷骰，支持 .r 1d100 50"""
         default_faces = self.config.get("default_dice_faces", 100)
-        if expression is None:
-            expression = f"1d{default_faces}"
-            
+        if expression is None: expression = f"1d{default_faces}"
         total, desc = self._safe_parse_dice(expression)
-        
         if total is None:
             yield event.plain_result(f"⚠️ {desc}")
             return
-            
         msg = f"🎲 掷骰: {expression}\n结果: {desc}"
-        
         if target is not None:
             check_res = self._check_result(total, target)
             msg += f"\n判定 ({target}): {check_res}"
-            
         yield event.plain_result(msg)
 
     @filter.command("rh", alias={"暗骰"})
     async def roll_hidden(self, event: AstrMessageEvent, expression: str = None):
         """私聊发送掷骰结果"""
         default_faces = self.config.get("default_dice_faces", 100)
-        if expression is None:
-            expression = f"1d{default_faces}"
-
+        if expression is None: expression = f"1d{default_faces}"
         total, desc = self._safe_parse_dice(expression)
-        
         if total is None:
              yield event.plain_result(f"⚠️ 暗骰格式错误: {desc}")
              return
-
         result_msg = f"🎲 暗骰结果: {expression} = {total}"
         user_id = event.get_sender_id()
-        
         try:
             from astrbot.api.message_components import Plain
             await self.context.send_message(
@@ -441,211 +295,150 @@ class DicePlugin(Star):
                 message_chain=[Plain(result_msg)],
             )
             yield event.plain_result(f"🎲 {event.get_sender_name()} 进行了一次暗骰。")
-            
             if event.get_platform_name() == "aiocqhttp":
                  await event.bot.api.call_action("send_private_msg", user_id=user_id, message=result_msg)
-            
         except Exception as e:
             logger.error(f"Hidden roll failed: {e}")
             yield event.plain_result("⚠️ 暗骰发送失败，请确保你已添加机器人好友。")
 
     @filter.command_group("st")
-    def st_group(self):
-        """人物卡管理指令组"""
-        pass
+    def st_group(self): pass
 
     @st_group.command("create")
     async def st_create(self, event: AstrMessageEvent, name: str, attributes: str):
         """创建人物卡: .st create 名字 力量50体质60..."""
         user_id = event.get_sender_id()
-        
         chars = await self._get_all_characters(user_id)
         if name in chars:
             yield event.plain_result(f"⚠️ 人物卡 **{name}** 已存在！")
             return
-
         matches = re.findall(r"([\u4e00-\u9fa5a-zA-Z]+)(\d+)", attributes)
         if not matches:
              yield event.plain_result("⚠️ 未识别到属性数据，请使用格式：力量50敏捷60")
              return
-
         attr_dict = {k: int(v) for k, v in matches}
         if "hp" in attr_dict: attr_dict["max_hp"] = attr_dict["hp"]
         if "san" in attr_dict: attr_dict["max_san"] = attr_dict["san"]
         if "mp" in attr_dict: attr_dict["max_mp"] = attr_dict["mp"]
-
         chara_id = str(uuid.uuid4())
-        data = {
-            "id": chara_id,
-            "name": name,
-            "attributes": attr_dict
-        }
-
+        data = { "id": chara_id, "name": name, "attributes": attr_dict }
         await self._save_character_data(user_id, chara_id, data)
         await self._set_current_character_id(user_id, chara_id)
-
         yield event.plain_result(f"✅ 人物卡 **{name}** 创建成功并已选中！")
 
     @st_group.command("show")
-    async def st_show(self, event: AstrMessageEvent):
-        """显示当前人物卡"""
+    async def st_show(self, event: AstrMessageEvent, ignore_arg: str = ""): # Fixed
+        """显示当前人物卡 (增加 ignore_arg 防止参数报错)"""
         user_id = event.get_sender_id()
         data = await self._get_current_character(user_id)
-        
         if not data:
             yield event.plain_result("⚠️ 当前未选中人物卡，请先使用 `.st create` 或 `.st change`。")
             return
-            
         lines = [f"📜 **{data['name']}** (ID: ...{data['id'][-4:]})"]
         lines.append("-" * 20)
-        
         attrs = data.get("attributes", {})
         sorted_keys = sorted(attrs.keys())
-        
         chunk_size = 3
         for i in range(0, len(sorted_keys), chunk_size):
             chunk = sorted_keys[i:i+chunk_size]
             line_parts = [f"{k}:{attrs[k]}" for k in chunk]
             lines.append("  ".join(line_parts))
-            
         yield event.plain_result("\n".join(lines))
 
     @st_group.command("list")
-    async def st_list(self, event: AstrMessageEvent):
-        """列出所有人物卡"""
+    async def st_list(self, event: AstrMessageEvent, ignore_arg: str = ""): # Fixed
+        """列出所有人物卡 (增加 ignore_arg 防止参数报错)"""
         user_id = event.get_sender_id()
         chars = await self._get_all_characters(user_id)
         curr_id = await self._get_current_character_id(user_id)
-        
         if not chars:
             yield event.plain_result("📭 你还没有创建过人物卡。")
             return
-            
         msg = ["📂 **你的人物卡列表**："]
         for name, cid in chars.items():
             mark = "👈 (当前)" if cid == curr_id else ""
             msg.append(f"- {name} {mark}")
-            
         yield event.plain_result("\n".join(msg))
 
     @st_group.command("change")
     async def st_change(self, event: AstrMessageEvent, name: str):
-        """切换人物卡"""
         user_id = event.get_sender_id()
         chars = await self._get_all_characters(user_id)
-        
         if name not in chars:
             yield event.plain_result(f"⚠️ 找不到名为 **{name}** 的人物卡。")
             return
-            
         await self._set_current_character_id(user_id, chars[name])
         yield event.plain_result(f"🔄 已切换至 **{name}**。")
 
     @st_group.command("update")
     async def st_update(self, event: AstrMessageEvent, attr: str, value_expr: str):
-        """更新属性: .st update hp -1d6"""
         user_id = event.get_sender_id()
         data = await self._get_current_character(user_id)
-        
         if not data:
             yield event.plain_result("⚠️ 未选中人物卡。")
             return
-            
         attrs = data["attributes"]
         current_val = attrs.get(attr, 0)
-        
         operator = None
         if value_expr.startswith(("+", "-", "*")):
             operator = value_expr[0]
             calc_part = value_expr[1:]
-        else:
-            calc_part = value_expr 
-            
+        else: calc_part = value_expr 
         change_val, change_desc = self._safe_parse_dice(calc_part)
-        
         if change_val is None:
             yield event.plain_result(f"⚠️ 数值解析错误: {change_desc}")
             return
-            
         old_val = current_val
         new_val = 0
-        
-        if operator == "+":
-            new_val = current_val + change_val
-        elif operator == "-":
-            new_val = current_val - change_val
-        elif operator == "*":
-            new_val = int(current_val * change_val)
-        else:
-            new_val = change_val 
-            
+        if operator == "+": new_val = current_val + change_val
+        elif operator == "-": new_val = current_val - change_val
+        elif operator == "*": new_val = int(current_val * change_val)
+        else: new_val = change_val 
         attrs[attr] = new_val
         await self._save_character_data(user_id, data["id"], data)
-        
         msg = f"📝 **{data['name']}** 的 {attr} 更新:\n"
-        if operator:
-            msg += f"{old_val} {operator} {change_desc} = **{new_val}**"
-        else:
-            msg += f"{old_val} → **{new_val}**"
-            
+        if operator: msg += f"{old_val} {operator} {change_desc} = **{new_val}**"
+        else: msg += f"{old_val} → **{new_val}**"
         yield event.plain_result(msg)
 
     @filter.command("ra")
     async def roll_attr(self, event: AstrMessageEvent, skill: str, value: int = None):
-        """技能判定: .ra 侦查 [数值]"""
         user_id = event.get_sender_id()
-        
         if value is None:
             data = await self._get_current_character(user_id)
-            if data:
-                value = data["attributes"].get(skill)
-        
+            if data: value = data["attributes"].get(skill)
         if value is None:
             yield event.plain_result(f"⚠️ 未找到技能 **{skill}** 的数值，请手动指定：`.ra {skill} 50`")
             return
-            
         roll_res = random.randint(1, 100)
         check = self._check_result(roll_res, value)
-        
         name_part = f"({data['name']})" if data else ""
         yield event.plain_result(f"🎲 **{skill}** {name_part}\n结果: {roll_res}/{value} \n{check}")
 
     @filter.command("sanc", alias={"san"}) 
     async def san_check(self, event: AstrMessageEvent, expr: str):
-        """San Check: .sanc 1/1d6"""
         user_id = event.get_sender_id()
         data = await self._get_current_character(user_id)
-        
         if not data:
              yield event.plain_result("⚠️ 请先加载人物卡 (.st change)")
              return
-             
         san = data["attributes"].get("san")
         if san is None:
              yield event.plain_result("⚠️ 当前人物卡没有 san 属性。")
              return
-             
         if "/" not in expr:
             yield event.plain_result("⚠️ 格式错误，应为：成功扣除/失败扣除 (例: .sanc 1/1d6)")
             return
-            
         success_expr, fail_expr = expr.split("/", 1)
-        
         roll = random.randint(1, 100)
         is_success = roll <= san
-        
         loss_expr = success_expr if is_success else fail_expr
         loss, loss_desc = self._safe_parse_dice(loss_expr)
-        
-        if loss is None:
-             loss = 0 
-        
+        if loss is None: loss = 0 
         new_san = max(0, san - loss)
         data["attributes"]["san"] = new_san
         await self._save_character_data(user_id, data["id"], data)
-        
         res_str = "✅ 成功" if is_success else "❌ 失败"
-        
         msg = (
             f"🧠 **San Check**\n"
             f"掷骰: {roll}/{san} ({res_str})\n"
@@ -655,8 +448,8 @@ class DicePlugin(Star):
         yield event.plain_result(msg)
 
     @filter.command("ti", alias={"临时疯狂"})
-    async def temp_insanity(self, event: AstrMessageEvent):
-        """抽取临时疯狂"""
+    async def temp_insanity(self, event: AstrMessageEvent, ignore_arg: str = ""): # Fixed
+        """抽取临时疯狂 (增加 ignore_arg)"""
         roll = random.randint(1, 10)
         insanities = [
             "失忆：只记得最后身处的安全地点。",
@@ -670,24 +463,20 @@ class DicePlugin(Star):
             "恐惧：产生一种特定的恐惧症。",
             "躁狂：产生一种特定的躁狂症。"
         ]
-        
         result = insanities[roll-1]
         extra_msg = ""
-        
         if "恐惧" in result and self.phobias:
             idx = str(random.randint(1, 100))
             extra_msg = f"\n症状: {self.phobias.get(idx, '未知恐惧')}"
         elif "躁狂" in result and self.manias:
             idx = str(random.randint(1, 100))
             extra_msg = f"\n症状: {self.manias.get(idx, '未知躁狂')}"
-            
         yield event.plain_result(f"🤪 **临时疯狂 (1d10={roll})**\n{result}{extra_msg}")
 
-    # ================= 帮助指令 (Updated) =================
+    # ================= 帮助指令 (Updated & Fixed) =================
     @filter.command("dicehelp")
-    async def dice_help(self, event: AstrMessageEvent):
-        """显示帮助菜单 (Html Render)"""
-        # 构建渲染数据
+    async def dice_help(self, event: AstrMessageEvent, ignore_arg: str = ""): # Fixed
+        """显示帮助菜单 (增加 ignore_arg，防止用户输入 /dicehelp xxxx 报错)"""
         data = {
             "sections": [
                 {
@@ -718,8 +507,5 @@ class DicePlugin(Star):
                 }
             ]
         }
-        
-        # 调用 AstrBot 内置的 HTML 渲染器
-        # 注意：html_render 内部使用 playwright
         url = await self.html_render(HELP_HTML_TEMPLATE, data)
         yield event.image_result(url)
