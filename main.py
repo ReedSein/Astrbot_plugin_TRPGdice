@@ -13,7 +13,7 @@ from astrbot.api import logger, AstrBotConfig
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ================= 古典风格帮助菜单模版 (高清重制版) =================
+# ================= 古典风格帮助菜单模版 (居中 & 高清版) =================
 HELP_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -24,29 +24,36 @@ HELP_HTML_TEMPLATE = """
 
         body {
             margin: 0;
-            padding: 40px; /* 增加留白 */
+            padding: 40px;
             background-color: transparent;
             font-family: 'Noto Serif SC', 'Songti SC', serif;
+            
+            /* 关键修改：使用 Flex 布局实现水平居中 */
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* 顶部对齐，防止垂直拉伸 */
+            width: fit-content;      /* 让 body 宽度自适应内容，防止右侧大片留白 */
+            min-width: 100%;         /* 确保至少占满视口 */
         }
 
         .parchment {
             background-color: #f3e5ce;
-            /* 更加细腻的纸张纹理效果 */
             background-image: 
                 radial-gradient(circle at center, #f8f1e0 0%, #f3e5ce 80%, #e6d2b0 100%);
-            padding: 60px; /* 增加内边距 */
-            border: 12px double #5c4033; /* 加粗边框 */
+            padding: 60px;
+            border: 12px double #5c4033;
             border-radius: 6px;
             box-shadow: 15px 15px 30px rgba(0,0,0,0.4);
             
-            /* 关键修改：增加宽度以提高清晰度 */
-            width: 900px; 
+            /* 保持高清宽度 */
+            width: 900px;
             
             color: #43302b;
             position: relative;
+            /* 自身居中兜底 */
+            margin: 0 auto; 
         }
 
-        /* 装饰性内边框 */
         .parchment::before {
             content: "";
             position: absolute;
@@ -63,7 +70,7 @@ HELP_HTML_TEMPLATE = """
         }
 
         .title {
-            font-size: 56px; /* 增大标题 */
+            font-size: 56px;
             font-weight: bold;
             letter-spacing: 10px;
             margin: 0;
@@ -72,7 +79,7 @@ HELP_HTML_TEMPLATE = """
         }
 
         .subtitle {
-            font-size: 24px; /* 增大副标题 */
+            font-size: 24px;
             font-style: italic;
             color: #7a6256;
             margin-top: 10px;
@@ -84,7 +91,7 @@ HELP_HTML_TEMPLATE = """
         }
 
         .section-title {
-            font-size: 28px; /* 增大章节标题 */
+            font-size: 28px;
             font-weight: bold;
             background-color: #5c4033;
             color: #f3e5ce;
@@ -105,7 +112,7 @@ HELP_HTML_TEMPLATE = """
             margin-bottom: 12px;
             display: flex;
             align-items: baseline;
-            border-bottom: 2px dashed #d1c0a5; /* 加粗虚线 */
+            border-bottom: 2px dashed #d1c0a5;
             padding-bottom: 8px;
         }
 
@@ -114,12 +121,12 @@ HELP_HTML_TEMPLATE = """
             font-weight: bold;
             color: #8b0000;
             margin-right: 20px;
-            font-size: 26px; /* 增大指令字体 */
+            font-size: 26px;
             white-space: nowrap;
         }
 
         .desc {
-            font-size: 22px; /* 增大描述字体 */
+            font-size: 22px;
             color: #43302b;
             line-height: 1.5;
         }
@@ -127,7 +134,7 @@ HELP_HTML_TEMPLATE = """
         .footer {
             text-align: center;
             margin-top: 50px;
-            font-size: 18px; /* 增大页脚 */
+            font-size: 18px;
             color: #8c7b70;
             font-style: italic;
             border-top: 2px solid #a89f91;
@@ -166,7 +173,7 @@ HELP_HTML_TEMPLATE = """
 </html>
 """
 
-@register("astrbot_plugin_TRPG", "shiroling", "TRPG玩家用骰 (Refactored)", "1.2.3")
+@register("astrbot_plugin_TRPG", "shiroling", "TRPG玩家用骰 (Refactored)", "1.2.4")
 class DicePlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -610,6 +617,6 @@ class DicePlugin(Star):
                 }
             ]
         }
-        # 使用 options={"full_page": True} 确保截取完整（虽然定宽 div 通常无需此项，但加了更保险）
+        # 使用 options={"full_page": True} 确保截取完整
         url = await self.html_render(HELP_HTML_TEMPLATE, data, options={"full_page": True})
         yield event.image_result(url)
