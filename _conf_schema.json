@@ -1,0 +1,71 @@
+{
+    "default_dice_faces": {
+        "description": "默认骰子面数 (例如 100)",
+        "type": "int",
+        "default": 100
+    },
+    "max_dice_count": {
+        "description": "单次掷骰的最大骰子数量 (防止恶意刷屏)",
+        "type": "int",
+        "default": 50
+    },
+    "enable_flavor_text": {
+        "description": "是否开启判定结果的氛围描写 (Flavor Text)",
+        "type": "bool",
+        "default": true
+    },
+    "flavor_critical_success": {
+        "description": "【大成功】时的文案库 (随机抽取)",
+        "type": "list",
+        "default": [
+            "干涸的石头裂开一道缝隙，在那一瞬间，你听见了水的声响。",
+            "命运女神不仅对你微笑，还给了你一个拥抱。",
+            "如同奇迹一般，一切都恰到好处。"
+        ]
+    },
+    "flavor_extreme_success": {
+        "description": "【极难成功】时的文案库 (随机抽取)",
+        "type": "list",
+        "default": [
+            "你在这堆石头瓦砾下，找到了一把尚未完全锈蚀的钥匙。",
+            "你的直觉锋利得如同刚刚打磨过的刀刃。",
+            "即便是在最微小的细节中，你也发现了通往真相的线索。"
+        ]
+    },
+    "flavor_hard_success": {
+        "description": "【困难成功】时的文案库 (随机抽取)",
+        "type": "list",
+        "default": [
+            "走廊尽头的门应声而开，露出的不过是另一段一模一样的走廊。",
+            "你成功克服了眼前的障碍，但前方依然迷雾重重。",
+            "这并非易事，但你做到了。"
+        ]
+    },
+    "flavor_success": {
+        "description": "【成功】时的文案库 (随机抽取)",
+        "type": "list",
+        "default": [
+            "命运的天平微微倾斜。",
+            "一切按计划进行。",
+            "你顺利完成了预想的行动。"
+        ]
+    },
+    "flavor_failure": {
+        "description": "【失败】时的文案库 (随机抽取)",
+        "type": "list",
+        "default": [
+            "你的影子落在墙上，如同用粉笔画的，一动不动。",
+            "你伸出手，却只抓住了虚无的空气。",
+            "事与愿违，现实给了你冰冷的一击。"
+        ]
+    },
+    "flavor_fumble": {
+        "description": "【大失败】时的文案库 (随机抽取)",
+        "type": "list",
+        "default": [
+            "你听见了一声干涩的、像是老鼠在碎玻璃上跑过的笑声，但房间里空无一人。",
+            "厄运如同一张无形的大网，将你死死缠绕。",
+            "最糟糕的情况发生了，甚至比你想象的还要糟。"
+        ]
+    }
+}
