@@ -23,124 +23,35 @@ HELP_HTML_TEMPLATE = """
         @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap');
 
         body {
-            margin: 0;
-            padding: 40px;
-            background-color: transparent;
+            margin: 0; padding: 40px; background-color: transparent;
             font-family: 'Noto Serif SC', 'Songti SC', serif;
-            
-            /* 关键修改：使用 Flex 布局实现水平居中 */
-            display: flex;
-            justify-content: center;
-            align-items: flex-start; /* 顶部对齐，防止垂直拉伸 */
-            width: fit-content;      /* 让 body 宽度自适应内容，防止右侧大片留白 */
-            min-width: 100%;         /* 确保至少占满视口 */
+            display: flex; justify-content: center; align-items: flex-start;
+            width: fit-content; min-width: 100%;
         }
 
         .parchment {
             background-color: #f3e5ce;
-            background-image: 
-                radial-gradient(circle at center, #f8f1e0 0%, #f3e5ce 80%, #e6d2b0 100%);
-            padding: 60px;
-            border: 12px double #5c4033;
-            border-radius: 6px;
-            box-shadow: 15px 15px 30px rgba(0,0,0,0.4);
-            
-            /* 保持高清宽度 */
-            width: 900px;
-            
-            color: #43302b;
-            position: relative;
-            /* 自身居中兜底 */
-            margin: 0 auto; 
+            background-image: radial-gradient(circle at center, #f8f1e0 0%, #f3e5ce 80%, #e6d2b0 100%);
+            padding: 60px; border: 12px double #5c4033; border-radius: 6px;
+            box-shadow: 15px 15px 30px rgba(0,0,0,0.4); width: 900px; color: #43302b;
+            position: relative; margin: 0 auto;
         }
 
         .parchment::before {
-            content: "";
-            position: absolute;
-            top: 15px; left: 15px; right: 15px; bottom: 15px;
-            border: 3px solid #a89f91;
-            pointer-events: none;
+            content: ""; position: absolute; top: 15px; left: 15px; right: 15px; bottom: 15px;
+            border: 3px solid #a89f91; pointer-events: none;
         }
 
-        .header {
-            text-align: center;
-            margin-bottom: 50px;
-            border-bottom: 3px solid #5c4033;
-            padding-bottom: 25px;
-        }
-
-        .title {
-            font-size: 56px;
-            font-weight: bold;
-            letter-spacing: 10px;
-            margin: 0;
-            text-shadow: 2px 2px 0px rgba(255,255,255,0.6);
-            color: #2c1e1a;
-        }
-
-        .subtitle {
-            font-size: 24px;
-            font-style: italic;
-            color: #7a6256;
-            margin-top: 10px;
-            font-family: 'Times New Roman', serif;
-        }
-
-        .section {
-            margin-bottom: 40px;
-        }
-
-        .section-title {
-            font-size: 28px;
-            font-weight: bold;
-            background-color: #5c4033;
-            color: #f3e5ce;
-            padding: 8px 20px;
-            display: inline-block;
-            border-radius: 4px;
-            margin-bottom: 20px;
-            box-shadow: 3px 3px 6px rgba(0,0,0,0.25);
-        }
-
-        .command-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        .command-item {
-            margin-bottom: 12px;
-            display: flex;
-            align-items: baseline;
-            border-bottom: 2px dashed #d1c0a5;
-            padding-bottom: 8px;
-        }
-
-        .cmd {
-            font-family: 'Consolas', 'Courier New', monospace;
-            font-weight: bold;
-            color: #8b0000;
-            margin-right: 20px;
-            font-size: 26px;
-            white-space: nowrap;
-        }
-
-        .desc {
-            font-size: 22px;
-            color: #43302b;
-            line-height: 1.5;
-        }
-
-        .footer {
-            text-align: center;
-            margin-top: 50px;
-            font-size: 18px;
-            color: #8c7b70;
-            font-style: italic;
-            border-top: 2px solid #a89f91;
-            padding-top: 20px;
-            font-family: 'Times New Roman', serif;
-        }
+        .header { text-align: center; margin-bottom: 50px; border-bottom: 3px solid #5c4033; padding-bottom: 25px; }
+        .title { font-size: 56px; font-weight: bold; letter-spacing: 10px; margin: 0; text-shadow: 2px 2px 0px rgba(255,255,255,0.6); color: #2c1e1a; }
+        .subtitle { font-size: 24px; font-style: italic; color: #7a6256; margin-top: 10px; font-family: 'Times New Roman', serif; }
+        .section { margin-bottom: 40px; }
+        .section-title { font-size: 28px; font-weight: bold; background-color: #5c4033; color: #f3e5ce; padding: 8px 20px; display: inline-block; border-radius: 4px; margin-bottom: 20px; box-shadow: 3px 3px 6px rgba(0,0,0,0.25); }
+        .command-list { list-style: none; padding: 0; margin: 0; }
+        .command-item { margin-bottom: 12px; display: flex; align-items: baseline; border-bottom: 2px dashed #d1c0a5; padding-bottom: 8px; }
+        .cmd { font-family: 'Consolas', 'Courier New', monospace; font-weight: bold; color: #8b0000; margin-right: 20px; font-size: 26px; white-space: nowrap; }
+        .desc { font-size: 22px; color: #43302b; line-height: 1.5; }
+        .footer { text-align: center; margin-top: 50px; font-size: 18px; color: #8c7b70; font-style: italic; border-top: 2px solid #a89f91; padding-top: 20px; font-family: 'Times New Roman', serif; }
     </style>
 </head>
 <body>
@@ -149,42 +60,32 @@ HELP_HTML_TEMPLATE = """
             <h1 class="title">调查员指南</h1>
             <div class="subtitle">Investigator's Handbook</div>
         </div>
-
         {% for section in sections %}
         <div class="section">
             <div class="section-title">{{ section.title }}</div>
             <ul class="command-list">
                 {% for cmd in section.commands %}
-                <li class="command-item">
-                    <span class="cmd">{{ cmd.syntax }}</span>
-                    <span class="desc">{{ cmd.desc }}</span>
-                </li>
+                <li class="command-item"><span class="cmd">{{ cmd.syntax }}</span><span class="desc">{{ cmd.desc }}</span></li>
                 {% endfor %}
             </ul>
         </div>
         {% endfor %}
-
-        <div class="footer">
-            Designed for TRPG Players · RosaのTRPG<br>
-            "May the dice be ever in your favor."
-        </div>
+        <div class="footer">Designed for TRPG Players · RosaのTRPG<br>"May the dice be ever in your favor."</div>
     </div>
 </body>
 </html>
 """
 
-@register("astrbot_plugin_TRPG", "shiroling", "TRPG玩家用骰 (Refactored)", "1.2.4")
+@register("astrbot_plugin_TRPG", "shiroling", "TRPG玩家用骰 (Refactored)", "1.2.5")
 class DicePlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
         
-        # ================= 数据路径配置 =================
         self.data_root = os.path.join(os.getcwd(), "data", "astrbot_plugin_TRPG")
         self.chara_data_dir = os.path.join(self.data_root, "chara_data")
         os.makedirs(self.chara_data_dir, exist_ok=True)
         
-        # ================= 加载静态资源 =================
         self.phobias = {}
         self.manias = {}
         self._load_static_resources()
@@ -202,8 +103,7 @@ class DicePlugin(Star):
     
     def _get_user_folder(self, user_id: str) -> str:
         folder = os.path.join(self.chara_data_dir, str(user_id))
-        if not os.path.exists(folder):
-            os.makedirs(folder, exist_ok=True)
+        if not os.path.exists(folder): os.makedirs(folder, exist_ok=True)
         return folder
 
     def _get_character_path(self, user_id: str, chara_id: str) -> str:
@@ -255,13 +155,11 @@ class DicePlugin(Star):
 
     async def _delete_character_file(self, user_id: str, chara_id: str):
         path = self._get_character_path(user_id, chara_id)
-        if os.path.exists(path):
-            os.remove(path)
+        if os.path.exists(path): os.remove(path)
 
     async def _get_current_character(self, user_id: str) -> Optional[dict]:
         cid = await self._get_current_character_id(user_id)
-        if cid:
-            return await self._load_character_data(user_id, cid)
+        if cid: return await self._load_character_data(user_id, cid)
         return None
 
     # ================= 核心骰子逻辑 =================
@@ -271,8 +169,7 @@ class DicePlugin(Star):
 
     def _roll_multi(self, count: int, faces: int) -> List[int]:
         max_dice = self.config.get("max_dice_count", 50)
-        if count > max_dice:
-            count = max_dice
+        if count > max_dice: count = max_dice
         return [self._roll_single(faces) for _ in range(count)]
 
     def _roll_coc_bonus_penalty(self, base_roll, bonus_dice=0, penalty_dice=0):
@@ -373,29 +270,105 @@ class DicePlugin(Star):
 
     @filter.command("roll", alias={"r", "掷骰"})
     async def roll_dice(self, event: AstrMessageEvent, expression: str = None, target: int = None):
-        """普通掷骰，支持 .r 1d100 50"""
+        """普通掷骰，支持 /r 1d100 50 或 /r 3#1d20"""
         default_faces = self.config.get("default_dice_faces", 100)
         if expression is None: expression = f"1d{default_faces}"
+        
+        # === 复读投掷逻辑 (N#expression) ===
+        if "#" in expression:
+            try:
+                parts = expression.split("#", 1)
+                count_str = parts[0].strip()
+                expr_part = parts[1].strip()
+                
+                # 若 # 前为空，默认为1次（例如 "#1d20"）
+                count = int(count_str) if count_str else 1
+                
+                # 限制最大复读次数，防止刷屏
+                if count > 10:
+                    yield event.plain_result("⚠️ 既然是复读，那就不要超过 10 次哦。")
+                    return
+                if count < 1:
+                    yield event.plain_result("⚠️ 至少要掷 1 次吧？")
+                    return
+                
+                results = []
+                # 循环执行多次解析
+                for i in range(count):
+                    total, desc = self._safe_parse_dice(expr_part)
+                    if total is None:
+                        yield event.plain_result(f"⚠️ 第 {i+1} 次解析失败: {desc}")
+                        return
+                    
+                    line = f"#{i+1}: {desc}"
+                    # 若带判定值，则每行单独判定
+                    if target is not None:
+                        check_res = self._check_result(total, target)
+                        # 多行模式下简化判定文本，只取第一行结果，不显示详细 Flavor
+                        simple_check = check_res.split('\n')[0]
+                        line += f" ({simple_check})"
+                    results.append(line)
+                
+                yield event.plain_result("\n".join(results))
+                return
+
+            except ValueError:
+                yield event.plain_result("⚠️ 复读格式错误，应为 3#1d20")
+                return
+        
+        # === 常规单次投掷 ===
         total, desc = self._safe_parse_dice(expression)
+        
         if total is None:
             yield event.plain_result(f"⚠️ {desc}")
             return
+            
         msg = f"🎲 掷骰: {expression}\n结果: {desc}"
+        
         if target is not None:
             check_res = self._check_result(total, target)
             msg += f"\n判定 ({target}): {check_res}"
+            
         yield event.plain_result(msg)
 
     @filter.command("rh", alias={"暗骰"})
     async def roll_hidden(self, event: AstrMessageEvent, expression: str = None):
-        """私聊发送掷骰结果"""
+        """私聊发送掷骰结果 (支持复读)"""
         default_faces = self.config.get("default_dice_faces", 100)
         if expression is None: expression = f"1d{default_faces}"
-        total, desc = self._safe_parse_dice(expression)
-        if total is None:
-             yield event.plain_result(f"⚠️ 暗骰格式错误: {desc}")
-             return
-        result_msg = f"🎲 暗骰结果: {expression} = {total}"
+
+        result_msg = ""
+        
+        # === 复读逻辑 ===
+        if "#" in expression:
+            try:
+                parts = expression.split("#", 1)
+                count = int(parts[0].strip()) if parts[0].strip() else 1
+                expr_part = parts[1].strip()
+                
+                if count > 10:
+                    yield event.plain_result("⚠️ 暗骰复读次数太多啦 (上限10)。")
+                    return
+                
+                lines = []
+                for i in range(count):
+                    total, desc = self._safe_parse_dice(expr_part)
+                    if total is None:
+                        yield event.plain_result(f"⚠️ 格式错误: {desc}")
+                        return
+                    lines.append(f"#{i+1}: {desc}")
+                result_msg = f"🎲 暗骰复读 ({count}次):\n" + "\n".join(lines)
+            except ValueError:
+                yield event.plain_result("⚠️ 格式错误。")
+                return
+        else:
+            # === 单次 ===
+            total, desc = self._safe_parse_dice(expression)
+            if total is None:
+                 yield event.plain_result(f"⚠️ 暗骰格式错误: {desc}")
+                 return
+            result_msg = f"🎲 暗骰结果: {expression} = {total}"
+
         user_id = event.get_sender_id()
         try:
             from astrbot.api.message_components import Plain
@@ -415,7 +388,7 @@ class DicePlugin(Star):
 
     @st_group.command("create")
     async def st_create(self, event: AstrMessageEvent, name: str, attributes: str):
-        """创建人物卡: .st create 名字 力量50体质60..."""
+        """创建人物卡: /st create 名字 力量50体质60..."""
         user_id = event.get_sender_id()
         chars = await self._get_all_characters(user_id)
         if name in chars:
@@ -441,7 +414,7 @@ class DicePlugin(Star):
         user_id = event.get_sender_id()
         data = await self._get_current_character(user_id)
         if not data:
-            yield event.plain_result("⚠️ 当前未选中人物卡，请先使用 `.st create` 或 `.st change`。")
+            yield event.plain_result("⚠️ 当前未选中人物卡，请先使用 `/st create` 或 `/st change`。")
             return
         lines = [f"📜 **{data['name']}** (ID: ...{data['id'][-4:]})"]
         lines.append("-" * 20)
@@ -517,7 +490,7 @@ class DicePlugin(Star):
             data = await self._get_current_character(user_id)
             if data: value = data["attributes"].get(skill)
         if value is None:
-            yield event.plain_result(f"⚠️ 未找到技能 **{skill}** 的数值，请手动指定：`.ra {skill} 50`")
+            yield event.plain_result(f"⚠️ 未找到技能 **{skill}** 的数值，请手动指定：`/ra {skill} 50`")
             return
         roll_res = random.randint(1, 100)
         check = self._check_result(roll_res, value)
@@ -529,14 +502,14 @@ class DicePlugin(Star):
         user_id = event.get_sender_id()
         data = await self._get_current_character(user_id)
         if not data:
-             yield event.plain_result("⚠️ 请先加载人物卡 (.st change)")
+             yield event.plain_result("⚠️ 请先加载人物卡 (/st change)")
              return
         san = data["attributes"].get("san")
         if san is None:
              yield event.plain_result("⚠️ 当前人物卡没有 san 属性。")
              return
         if "/" not in expr:
-            yield event.plain_result("⚠️ 格式错误，应为：成功扣除/失败扣除 (例: .sanc 1/1d6)")
+            yield event.plain_result("⚠️ 格式错误，应为：成功扣除/失败扣除 (例: /sanc 1/1d6)")
             return
         success_expr, fail_expr = expr.split("/", 1)
         roll = random.randint(1, 100)
@@ -582,11 +555,10 @@ class DicePlugin(Star):
             extra_msg = f"\n症状: {self.manias.get(idx, '未知躁狂')}"
         yield event.plain_result(f"🤪 **临时疯狂 (1d10={roll})**\n{result}{extra_msg}")
 
-    # ================= 帮助指令 (Updated) =================
+    # ================= 帮助指令 =================
     @filter.command("dicehelp")
     async def dice_help(self, event: AstrMessageEvent, ignore_arg: str = ""):
-        """显示帮助菜单 (增加 ignore_arg，防止用户输入 /dicehelp xxxx 报错)"""
-        # 数据修正：使用 "/" 前缀
+        """显示帮助菜单"""
         data = {
             "sections": [
                 {
@@ -617,6 +589,5 @@ class DicePlugin(Star):
                 }
             ]
         }
-        # 使用 options={"full_page": True} 确保截取完整
         url = await self.html_render(HELP_HTML_TEMPLATE, data, options={"full_page": True})
         yield event.image_result(url)
