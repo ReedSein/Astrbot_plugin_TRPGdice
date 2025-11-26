@@ -76,7 +76,7 @@ HELP_HTML_TEMPLATE = """
 </html>
 """
 
-@register("astrbot_plugin_TRPG", "shiroling", "TRPG玩家用骰 (Refactored)", "1.2.5")
+@register("astrbot_plugin_TRPG", "shiroling", "TRPG玩家用骰 (Refactored)", "1.2.6")
 class DicePlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -216,10 +216,12 @@ class DicePlugin(Star):
                         keep = int(keep_str)
                         selected = sorted(rolls, reverse=True)[:keep]
                         subtotal = sum(selected)
-                        details.append(f"[{','.join(map(str, rolls))}选{keep}]")
+                        # 修复：将 [] 改为 ()，防止被平台误吞
+                        details.append(f"({' + '.join(map(str, rolls))})选{keep}")
                     else:
                         subtotal = sum(rolls)
-                        details.append(f"[{'+'.join(map(str, rolls))}]")
+                        # 修复：将 [] 改为 ()
+                        details.append(f"({' + '.join(map(str, rolls))})")
                     total += subtotal * sign
                 else:
                     if "*" in part:
@@ -233,6 +235,10 @@ class DicePlugin(Star):
                         total += val * sign
                         details.append(str(val))
         except Exception as e: return None, f"计算错误: {str(e)}"
+        
+        # 确保 details 不为空，防止 join 后头部为空
+        if not details: details = ["0"]
+        
         expr_str = " + ".join(details).replace("+ -", "- ")
         return total, f"{expr_str} = {total}"
 
@@ -280,11 +286,8 @@ class DicePlugin(Star):
                 parts = expression.split("#", 1)
                 count_str = parts[0].strip()
                 expr_part = parts[1].strip()
-                
-                # 若 # 前为空，默认为1次（例如 "#1d20"）
                 count = int(count_str) if count_str else 1
                 
-                # 限制最大复读次数，防止刷屏
                 if count > 10:
                     yield event.plain_result("⚠️ 既然是复读，那就不要超过 10 次哦。")
                     return
@@ -293,18 +296,16 @@ class DicePlugin(Star):
                     return
                 
                 results = []
-                # 循环执行多次解析
                 for i in range(count):
                     total, desc = self._safe_parse_dice(expr_part)
                     if total is None:
                         yield event.plain_result(f"⚠️ 第 {i+1} 次解析失败: {desc}")
                         return
                     
-                    line = f"#{i+1}: {desc}"
-                    # 若带判定值，则每行单独判定
+                    # 修复：使用 🎲 作为序号前缀
+                    line = f"🎲{i+1}: {desc}"
                     if target is not None:
                         check_res = self._check_result(total, target)
-                        # 多行模式下简化判定文本，只取第一行结果，不显示详细 Flavor
                         simple_check = check_res.split('\n')[0]
                         line += f" ({simple_check})"
                     results.append(line)
@@ -316,7 +317,7 @@ class DicePlugin(Star):
                 yield event.plain_result("⚠️ 复读格式错误，应为 3#1d20")
                 return
         
-        # === 常规单次投掷 ===
+        # === 单次 ===
         total, desc = self._safe_parse_dice(expression)
         
         if total is None:
@@ -338,31 +339,27 @@ class DicePlugin(Star):
         if expression is None: expression = f"1d{default_faces}"
 
         result_msg = ""
-        
-        # === 复读逻辑 ===
         if "#" in expression:
             try:
                 parts = expression.split("#", 1)
                 count = int(parts[0].strip()) if parts[0].strip() else 1
                 expr_part = parts[1].strip()
-                
                 if count > 10:
                     yield event.plain_result("⚠️ 暗骰复读次数太多啦 (上限10)。")
                     return
-                
                 lines = []
                 for i in range(count):
                     total, desc = self._safe_parse_dice(expr_part)
                     if total is None:
                         yield event.plain_result(f"⚠️ 格式错误: {desc}")
                         return
-                    lines.append(f"#{i+1}: {desc}")
+                    # 修复：使用 🎲
+                    lines.append(f"🎲{i+1}: {desc}")
                 result_msg = f"🎲 暗骰复读 ({count}次):\n" + "\n".join(lines)
             except ValueError:
                 yield event.plain_result("⚠️ 格式错误。")
                 return
         else:
-            # === 单次 ===
             total, desc = self._safe_parse_dice(expression)
             if total is None:
                  yield event.plain_result(f"⚠️ 暗骰格式错误: {desc}")
@@ -556,7 +553,8 @@ class DicePlugin(Star):
         yield event.plain_result(f"🤪 **临时疯狂 (1d10={roll})**\n{result}{extra_msg}")
 
     # ================= 帮助指令 =================
-    @filter.command("dicehelp")
+    # 修复：增加 subrosa_dice 别名
+    @filter.command("dicehelp", alias={"subrosa_dice"})
     async def dice_help(self, event: AstrMessageEvent, ignore_arg: str = ""):
         """显示帮助菜单"""
         data = {
