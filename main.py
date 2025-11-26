@@ -13,18 +13,18 @@ from astrbot.api import logger, AstrBotConfig
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ================= 古典风格帮助菜单模版 (居中 & 高清版) =================
+# ================= 古典风格帮助菜单模版 (去联网稳定版) =================
+# 移除了 Google Fonts 引用，直接使用系统字体，防止代理导致渲染失败
 HELP_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap');
-
         body {
             margin: 0; padding: 40px; background-color: transparent;
-            font-family: 'Noto Serif SC', 'Songti SC', serif;
+            /* 优先使用本地宋体/明体，无网络依赖 */
+            font-family: 'Songti SC', 'SimSun', 'Times New Roman', 'Noto Serif SC', serif;
             display: flex; justify-content: center; align-items: flex-start;
             width: fit-content; min-width: 100%;
         }
@@ -76,7 +76,7 @@ HELP_HTML_TEMPLATE = """
 </html>
 """
 
-@register("astrbot_plugin_TRPG", "shiroling", "TRPG玩家用骰 (Refactored)", "1.2.6")
+@register("astrbot_plugin_TRPG", "shiroling", "TRPG玩家用骰 (Refactored)", "1.2.7")
 class DicePlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -216,11 +216,11 @@ class DicePlugin(Star):
                         keep = int(keep_str)
                         selected = sorted(rolls, reverse=True)[:keep]
                         subtotal = sum(selected)
-                        # 修复：将 [] 改为 ()，防止被平台误吞
+                        # 使用圆括号，防止被平台误吞
                         details.append(f"({' + '.join(map(str, rolls))})选{keep}")
                     else:
                         subtotal = sum(rolls)
-                        # 修复：将 [] 改为 ()
+                        # 使用圆括号
                         details.append(f"({' + '.join(map(str, rolls))})")
                     total += subtotal * sign
                 else:
@@ -236,7 +236,6 @@ class DicePlugin(Star):
                         details.append(str(val))
         except Exception as e: return None, f"计算错误: {str(e)}"
         
-        # 确保 details 不为空，防止 join 后头部为空
         if not details: details = ["0"]
         
         expr_str = " + ".join(details).replace("+ -", "- ")
@@ -302,7 +301,6 @@ class DicePlugin(Star):
                         yield event.plain_result(f"⚠️ 第 {i+1} 次解析失败: {desc}")
                         return
                     
-                    # 修复：使用 🎲 作为序号前缀
                     line = f"🎲{i+1}: {desc}"
                     if target is not None:
                         check_res = self._check_result(total, target)
@@ -319,17 +317,13 @@ class DicePlugin(Star):
         
         # === 单次 ===
         total, desc = self._safe_parse_dice(expression)
-        
         if total is None:
             yield event.plain_result(f"⚠️ {desc}")
             return
-            
         msg = f"🎲 掷骰: {expression}\n结果: {desc}"
-        
         if target is not None:
             check_res = self._check_result(total, target)
             msg += f"\n判定 ({target}): {check_res}"
-            
         yield event.plain_result(msg)
 
     @filter.command("rh", alias={"暗骰"})
@@ -353,7 +347,6 @@ class DicePlugin(Star):
                     if total is None:
                         yield event.plain_result(f"⚠️ 格式错误: {desc}")
                         return
-                    # 修复：使用 🎲
                     lines.append(f"🎲{i+1}: {desc}")
                 result_msg = f"🎲 暗骰复读 ({count}次):\n" + "\n".join(lines)
             except ValueError:
@@ -553,7 +546,6 @@ class DicePlugin(Star):
         yield event.plain_result(f"🤪 **临时疯狂 (1d10={roll})**\n{result}{extra_msg}")
 
     # ================= 帮助指令 =================
-    # 修复：增加 subrosa_dice 别名
     @filter.command("dicehelp", alias={"subrosa_dice"})
     async def dice_help(self, event: AstrMessageEvent, ignore_arg: str = ""):
         """显示帮助菜单"""
