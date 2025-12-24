@@ -4,17 +4,88 @@ import json
 import re
 import uuid
 import asyncio
-import aiofiles
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Optional, List, Tuple, Dict, Any, Union
 
+import aiofiles
+import aiohttp
+from collections import deque
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger, AstrBotConfig
+from astrbot.api.message_components import Plain
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
+class TrueRandomManager:
+    """
+    真随机数管理器 (基于 Random.org)
+    策略: 缓存 0-1 之间的小数，适用于任意面值的骰子。
+    """
+    def __init__(self, buffer_size=100):
+        self.buffer = deque()
+        self.buffer_size = buffer_size
+        self.is_fetching = False
+        self.api_url = "https://www.random.org/decimal-fractions/"
+        # 保留20位小数以确保精度足够
+        self.params = {
+            "num": str(buffer_size),
+            "dec": "20",
+            "col": "1",
+            "format": "plain",
+            "rnd": "new"
+        }
+
+    async def get_fraction(self) -> float:
+        """
+        获取一个 0-1 之间的随机小数。
+        优先从缓存取，缓存不足触发异步补充，缓存为空自动降级。
+        """
+        # 1. 检查缓存水位，低水位触发补充 (例如少于 20% 时)
+        if len(self.buffer) < self.buffer_size * 0.2 and not self.is_fetching:
+            asyncio.create_task(self._refill_buffer())
+
+        # 2. 尝试从缓存取值
+        if self.buffer:
+            return self.buffer.popleft()
+        
+        # 3. 缓存为空，降级到伪随机
+        # logger.debug("TrueRandom buffer empty, fallback to pseudo-random.")
+        return random.random()
+
+    async def _refill_buffer(self):
+        """异步补充缓存，严禁并发请求"""
+        if self.is_fetching:
+            return
+        
+        self.is_fetching = True
+        try:
+            # logger.debug("Refilling TrueRandom buffer...")
+            async with aiohttp.ClientSession() as session:
+                async with session.get(self.api_url, params=self.params, timeout=10) as resp:
+                    if resp.status == 200:
+                        text = await resp.text()
+                        # 解析返回的纯文本数字
+                        numbers = []
+                        for line in text.strip().split('\n'):
+                            try:
+                                if line.strip():
+                                    numbers.append(float(line.strip()))
+                            except ValueError:
+                                pass
+                        
+                        if numbers:
+                            self.buffer.extend(numbers)
+                            # logger.info(f"TrueRandom buffer refilled. Current size: {len(self.buffer)}")
+                        else:
+                            logger.warning("Random.org returned no valid numbers.")
+                    else:
+                        logger.warning(f"Random.org API failed: {resp.status}")
+        except Exception as e:
+            logger.warning(f"Failed to connect to Random.org: {e}")
+        finally:
+            self.is_fetching = False
+
 # ================= 古典风格帮助菜单模版 (去联网稳定版) =================
-# 移除了 Google Fonts 引用，直接使用系统字体，防止代理导致渲染失败
 HELP_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -23,12 +94,10 @@ HELP_HTML_TEMPLATE = """
     <style>
         body {
             margin: 0; padding: 40px; background-color: transparent;
-            /* 优先使用本地宋体/明体，无网络依赖 */
             font-family: 'Songti SC', 'SimSun', 'Times New Roman', 'Noto Serif SC', serif;
             display: flex; justify-content: center; align-items: flex-start;
             width: fit-content; min-width: 100%;
         }
-
         .parchment {
             background-color: #f3e5ce;
             background-image: radial-gradient(circle at center, #f8f1e0 0%, #f3e5ce 80%, #e6d2b0 100%);
@@ -36,12 +105,10 @@ HELP_HTML_TEMPLATE = """
             box-shadow: 15px 15px 30px rgba(0,0,0,0.4); width: 900px; color: #43302b;
             position: relative; margin: 0 auto;
         }
-
         .parchment::before {
             content: ""; position: absolute; top: 15px; left: 15px; right: 15px; bottom: 15px;
             border: 3px solid #a89f91; pointer-events: none;
         }
-
         .header { text-align: center; margin-bottom: 50px; border-bottom: 3px solid #5c4033; padding-bottom: 25px; }
         .title { font-size: 56px; font-weight: bold; letter-spacing: 10px; margin: 0; text-shadow: 2px 2px 0px rgba(255,255,255,0.6); color: #2c1e1a; }
         .subtitle { font-size: 24px; font-style: italic; color: #7a6256; margin-top: 10px; font-family: 'Times New Roman', serif; }
@@ -86,16 +153,30 @@ class DicePlugin(Star):
         self.chara_data_dir = os.path.join(self.data_root, "chara_data")
         os.makedirs(self.chara_data_dir, exist_ok=True)
         
-        self.phobias = {}
-        self.manias = {}
+        self.phobias: Dict[str, str] = {}
+        self.manias: Dict[str, str] = {}
         self._load_static_resources()
+        
+        # 初始化真随机管理器
+        self.rng_manager = None
+        if self.config.get("enable_true_random", True):
+            buffer_size = self.config.get("true_random_buffer_size", 100)
+            self.rng_manager = TrueRandomManager(buffer_size=buffer_size)
 
     def _load_static_resources(self):
+        """加载静态资源文件"""
         try:
-            with open(os.path.join(PLUGIN_DIR, "phobias.json"), "r", encoding="utf-8") as f:
-                self.phobias = json.load(f).get("phobias", {})
-            with open(os.path.join(PLUGIN_DIR, "mania.json"), "r", encoding="utf-8") as f:
-                self.manias = json.load(f).get("manias", {})
+            phobia_path = os.path.join(PLUGIN_DIR, "phobias.json")
+            if os.path.exists(phobia_path):
+                with open(phobia_path, "r", encoding="utf-8") as f:
+                    self.phobias = json.load(f).get("phobias", {})
+            
+            mania_path = os.path.join(PLUGIN_DIR, "mania.json")
+            if os.path.exists(mania_path):
+                with open(mania_path, "r", encoding="utf-8") as f:
+                    self.manias = json.load(f).get("manias", {})
+            
+            logger.info(f"TRPG Resources Loaded: {len(self.phobias)} phobias, {len(self.manias)} manias.")
         except Exception as e:
             logger.error(f"Failed to load TRPG static resources: {e}")
 
@@ -103,7 +184,8 @@ class DicePlugin(Star):
     
     def _get_user_folder(self, user_id: str) -> str:
         folder = os.path.join(self.chara_data_dir, str(user_id))
-        if not os.path.exists(folder): os.makedirs(folder, exist_ok=True)
+        if not os.path.exists(folder):
+            os.makedirs(folder, exist_ok=True)
         return folder
 
     def _get_character_path(self, user_id: str, chara_id: str) -> str:
@@ -113,16 +195,22 @@ class DicePlugin(Star):
         return os.path.join(self._get_user_folder(user_id), "current.txt")
 
     async def _get_all_characters(self, user_id: str) -> Dict[str, str]:
+        """获取用户所有人物卡 {name: id}"""
         folder = self._get_user_folder(user_id)
         characters = {}
         try:
             for filename in os.listdir(folder):
                 if filename.endswith(".json"):
                     path = os.path.join(folder, filename)
-                    async with aiofiles.open(path, "r", encoding="utf-8") as f:
-                        content = await f.read()
-                        data = json.loads(content)
-                        characters[data["name"]] = data["id"]
+                    try:
+                        async with aiofiles.open(path, "r", encoding="utf-8") as f:
+                            content = await f.read()
+                            data = json.loads(content)
+                            if "name" in data and "id" in data:
+                                characters[data["name"]] = data["id"]
+                    except json.JSONDecodeError:
+                        logger.warning(f"Corrupted character file: {filename}")
+                        continue
         except Exception as e:
             logger.error(f"Error listing characters for {user_id}: {e}")
         return characters
@@ -143,9 +231,13 @@ class DicePlugin(Star):
     async def _load_character_data(self, user_id: str, chara_id: str) -> Optional[dict]:
         path = self._get_character_path(user_id, chara_id)
         if os.path.exists(path):
-            async with aiofiles.open(path, "r", encoding="utf-8") as f:
-                content = await f.read()
-                return json.loads(content)
+            try:
+                async with aiofiles.open(path, "r", encoding="utf-8") as f:
+                    content = await f.read()
+                    return json.loads(content)
+            except Exception as e:
+                logger.error(f"Error loading character {chara_id}: {e}")
+                return None
         return None
 
     async def _save_character_data(self, user_id: str, chara_id: str, data: dict):
@@ -153,96 +245,112 @@ class DicePlugin(Star):
         async with aiofiles.open(path, "w", encoding="utf-8") as f:
             await f.write(json.dumps(data, indent=4, ensure_ascii=False))
 
-    async def _delete_character_file(self, user_id: str, chara_id: str):
-        path = self._get_character_path(user_id, chara_id)
-        if os.path.exists(path): os.remove(path)
-
     async def _get_current_character(self, user_id: str) -> Optional[dict]:
         cid = await self._get_current_character_id(user_id)
-        if cid: return await self._load_character_data(user_id, cid)
+        if cid:
+            return await self._load_character_data(user_id, cid)
         return None
 
     # ================= 核心骰子逻辑 =================
 
-    def _roll_single(self, faces: int) -> int:
-        return random.randint(1, faces)
+    async def _roll_single(self, faces: int) -> int:
+        """
+        掷单个骰子，使用真随机源。
+        公式: floor(fraction * faces) + 1
+        """
+        if self.rng_manager:
+            fraction = await self.rng_manager.get_fraction()
+            return int(fraction * faces) + 1
+        else:
+            return random.randint(1, faces)
 
-    def _roll_multi(self, count: int, faces: int) -> List[int]:
+    async def _roll_multi(self, count: int, faces: int) -> List[int]:
         max_dice = self.config.get("max_dice_count", 50)
-        if count > max_dice: count = max_dice
-        return [self._roll_single(faces) for _ in range(count)]
+        # 限制最大骰子数，防止 DoS
+        count = min(count, max_dice)
+        # 串行获取随机数（因为 get_fraction 内部是非阻塞的）
+        return [await self._roll_single(faces) for _ in range(count)]
 
-    def _roll_coc_bonus_penalty(self, base_roll, bonus_dice=0, penalty_dice=0):
-        tens = base_roll // 10
-        ones = base_roll % 10
-        if ones == 0: ones = 10 
-        extra_dice_count = max(bonus_dice, penalty_dice)
-        if extra_dice_count == 0: return base_roll
-        results = [base_roll]
-        current_ones = (base_roll - 1) % 10 + 1 
-        for _ in range(extra_dice_count):
-            new_tens = random.randint(0, 9)
-            new_val = new_tens * 10 + current_ones
-            if new_val == 0: new_val = 100 
-            results.append(new_val)
-        if bonus_dice > 0: return min(results)
-        else: return max(results)
-
-    def _safe_parse_dice(self, expression: str) -> Tuple[Optional[int], str]:
+    async def _safe_parse_dice(self, expression: str) -> Tuple[Optional[int], str]:
+        """
+        解析并执行简单的骰子表达式。
+        支持: NdM, +, -, *, 纯数字, k(Keep)
+        """
         expression = expression.lower().replace(" ", "")
         if not re.match(r"^[0-9d+\-*k]+$", expression):
             return None, "表达式含有非法字符"
+        
         safe_expr = expression.replace("-", "+-")
         parts = safe_expr.split("+")
+        
         total = 0
         details = []
+        
         try:
             for part in parts:
                 if not part: continue
+                
                 sign = 1
                 if part.startswith("-"):
                     sign = -1
                     part = part[1:]
+                
                 if "d" in part:
                     match = re.match(r"^(\d*)d(\d+)(?:k(\d+))?$", part)
-                    if not match: return None, f"无法解析骰子部分: {part}"
+                    if not match: 
+                        return None, f"无法解析骰子部分: {part}"
+                    
                     count_str, faces_str, keep_str = match.groups()
                     count = int(count_str) if count_str else 1
                     faces = int(faces_str)
+                    
                     if count > self.config.get("max_dice_count", 50):
                         return None, f"骰子数量过多 (上限 {self.config.get('max_dice_count', 50)})"
-                    rolls = self._roll_multi(count, faces)
+                    
+                    rolls = await self._roll_multi(count, faces)
+                    
                     if keep_str:
                         keep = int(keep_str)
                         selected = sorted(rolls, reverse=True)[:keep]
                         subtotal = sum(selected)
-                        # 使用圆括号，防止被平台误吞
                         details.append(f"({' + '.join(map(str, rolls))})选{keep}")
                     else:
                         subtotal = sum(rolls)
-                        # 使用圆括号
-                        details.append(f"({' + '.join(map(str, rolls))})")
+                        if len(rolls) == 1:
+                             details.append(f"{subtotal}")
+                        else:
+                             details.append(f"({' + '.join(map(str, rolls))})")
+                    
                     total += subtotal * sign
+                
+                elif "*" in part:
+                    factors = part.split("*")
+                    sub_prod = 1
+                    for f in factors:
+                        sub_prod *= int(f)
+                    total += sub_prod * sign
+                    details.append(str(sub_prod))
+                    
                 else:
-                    if "*" in part:
-                        factors = part.split("*")
-                        sub_prod = 1
-                        for f in factors: sub_prod *= int(f)
-                        total += sub_prod * sign
-                        details.append(str(sub_prod))
-                    else:
-                        val = int(part)
-                        total += val * sign
-                        details.append(str(val))
-        except Exception as e: return None, f"计算错误: {str(e)}"
+                    val = int(part)
+                    total += val * sign
+                    details.append(str(val))
+                    
+        except Exception as e:
+            return None, f"计算错误: {str(e)}"
         
-        if not details: details = ["0"]
+        if not details:
+            return 0, "0"
         
         expr_str = " + ".join(details).replace("+ -", "- ")
+        if expr_str == str(total):
+            return total, str(total)
+            
         return total, f"{expr_str} = {total}"
 
     def _get_flavor_text(self, result_type: str) -> str:
         if not self.config.get("enable_flavor_text", True): return ""
+        
         key_map = {
             "🎉 大成功": "flavor_critical_success",
             "✨ 极难成功": "flavor_extreme_success",
@@ -251,24 +359,37 @@ class DicePlugin(Star):
             "❌ 失败": "flavor_failure",
             "💀 大失败": "flavor_fumble"
         }
+        
         config_key = key_map.get(result_type)
         if not config_key: return ""
+        
         texts = self.config.get(config_key, [])
         if not texts: return ""
+        
         return random.choice(texts)
 
     def _check_result(self, total: int, target: int) -> str:
         if target <= 0: return "未知"
+        
         result_str = ""
-        if total == 1: result_str = "🎉 大成功"
-        elif total <= target // 5: result_str = "✨ 极难成功"
-        elif total <= target // 2: result_str = "✔ 困难成功"
-        elif total <= target: result_str = "✅ 成功"
-        elif total == 100: result_str = "💀 大失败"
-        elif total >= 96 and target < 50: result_str = "💀 大失败"
-        else: result_str = "❌ 失败"
+        if total == 1:
+            result_str = "🎉 大成功"
+        elif total <= target // 5:
+            result_str = "✨ 极难成功"
+        elif total <= target // 2:
+            result_str = "✔ 困难成功"
+        elif total <= target:
+            result_str = "✅ 成功"
+        elif total == 100:
+            result_str = "💀 大失败"
+        elif total >= 96 and target < 50:
+            result_str = "💀 大失败"
+        else:
+            result_str = "❌ 失败"
+            
         flavor = self._get_flavor_text(result_str)
-        if flavor: return f"{result_str}\n> {flavor}"
+        if flavor:
+            return f"{result_str}\n> {flavor}"
         return result_str
 
     # ================= 指令处理 Handlers =================
@@ -277,9 +398,9 @@ class DicePlugin(Star):
     async def roll_dice(self, event: AstrMessageEvent, expression: str = None, target: int = None):
         """普通掷骰，支持 /r 1d100 50 或 /r 3#1d20"""
         default_faces = self.config.get("default_dice_faces", 100)
-        if expression is None: expression = f"1d{default_faces}"
+        if expression is None:
+            expression = f"1d{default_faces}"
         
-        # === 复读投掷逻辑 (N#expression) ===
         if "#" in expression:
             try:
                 parts = expression.split("#", 1)
@@ -288,7 +409,7 @@ class DicePlugin(Star):
                 count = int(count_str) if count_str else 1
                 
                 if count > 10:
-                    yield event.plain_result("⚠️ 既然是复读，那就不要超过 10 次哦。")
+                    yield event.plain_result("⚠️ 既然是复读，那就不要超过 10 次哦。 সন")
                     return
                 if count < 1:
                     yield event.plain_result("⚠️ 至少要掷 1 次吧？")
@@ -296,7 +417,7 @@ class DicePlugin(Star):
                 
                 results = []
                 for i in range(count):
-                    total, desc = self._safe_parse_dice(expr_part)
+                    total, desc = await self._safe_parse_dice(expr_part)
                     if total is None:
                         yield event.plain_result(f"⚠️ 第 {i+1} 次解析失败: {desc}")
                         return
@@ -315,11 +436,11 @@ class DicePlugin(Star):
                 yield event.plain_result("⚠️ 复读格式错误，应为 3#1d20")
                 return
         
-        # === 单次 ===
-        total, desc = self._safe_parse_dice(expression)
+        total, desc = await self._safe_parse_dice(expression)
         if total is None:
             yield event.plain_result(f"⚠️ {desc}")
             return
+            
         msg = f"🎲 掷骰: {expression}\n结果: {desc}"
         if target is not None:
             check_res = self._check_result(total, target)
@@ -330,7 +451,8 @@ class DicePlugin(Star):
     async def roll_hidden(self, event: AstrMessageEvent, expression: str = None):
         """私聊发送掷骰结果 (支持复读)"""
         default_faces = self.config.get("default_dice_faces", 100)
-        if expression is None: expression = f"1d{default_faces}"
+        if expression is None:
+            expression = f"1d{default_faces}"
 
         result_msg = ""
         if "#" in expression:
@@ -338,12 +460,14 @@ class DicePlugin(Star):
                 parts = expression.split("#", 1)
                 count = int(parts[0].strip()) if parts[0].strip() else 1
                 expr_part = parts[1].strip()
+                
                 if count > 10:
                     yield event.plain_result("⚠️ 暗骰复读次数太多啦 (上限10)。")
                     return
+                    
                 lines = []
                 for i in range(count):
-                    total, desc = self._safe_parse_dice(expr_part)
+                    total, desc = await self._safe_parse_dice(expr_part)
                     if total is None:
                         yield event.plain_result(f"⚠️ 格式错误: {desc}")
                         return
@@ -353,28 +477,33 @@ class DicePlugin(Star):
                 yield event.plain_result("⚠️ 格式错误。")
                 return
         else:
-            total, desc = self._safe_parse_dice(expression)
+            total, desc = await self._safe_parse_dice(expression)
             if total is None:
                  yield event.plain_result(f"⚠️ 暗骰格式错误: {desc}")
                  return
             result_msg = f"🎲 暗骰结果: {expression} = {total}"
 
-        user_id = event.get_sender_id()
         try:
-            from astrbot.api.message_components import Plain
             await self.context.send_message(
                 target=event.unified_msg_origin,
                 message_chain=[Plain(result_msg)],
             )
             yield event.plain_result(f"🎲 {event.get_sender_name()} 进行了一次暗骰。")
-            if event.get_platform_name() == "aiocqhttp":
-                 await event.bot.api.call_action("send_private_msg", user_id=user_id, message=result_msg)
+            
+            if event.get_platform_name() == "aiocqhttp" and event.message_obj.group_id:
+                 user_id = event.get_sender_id()
+                 try:
+                    await event.bot.api.call_action("send_private_msg", user_id=user_id, message=result_msg)
+                 except Exception:
+                    pass
+                    
         except Exception as e:
             logger.error(f"Hidden roll failed: {e}")
             yield event.plain_result("⚠️ 暗骰发送失败，请确保你已添加机器人好友。")
 
     @filter.command_group("st")
-    def st_group(self): pass
+    def st_group(self):
+        pass
 
     @st_group.command("create")
     async def st_create(self, event: AstrMessageEvent, name: str, attributes: str):
@@ -384,16 +513,22 @@ class DicePlugin(Star):
         if name in chars:
             yield event.plain_result(f"⚠️ 人物卡 **{name}** 已存在！")
             return
-        matches = re.findall(r"([\u4e00-\u9fa5a-zA-Z]+)(\d+)", attributes)
+            
+        matches = re.findall(r"([\u4e00-\u9fa5a-zA-Z_]+)\s*(\d+)", attributes)
+        
         if not matches:
-             yield event.plain_result("⚠️ 未识别到属性数据，请使用格式：力量50敏捷60")
+             yield event.plain_result("⚠️ 未识别到属性数据，请使用格式：力量50 敏捷60")
              return
+             
         attr_dict = {k: int(v) for k, v in matches}
-        if "hp" in attr_dict: attr_dict["max_hp"] = attr_dict["hp"]
-        if "san" in attr_dict: attr_dict["max_san"] = attr_dict["san"]
-        if "mp" in attr_dict: attr_dict["max_mp"] = attr_dict["mp"]
+        
+        if "hp" in attr_dict and "max_hp" not in attr_dict: attr_dict["max_hp"] = attr_dict["hp"]
+        if "san" in attr_dict and "max_san" not in attr_dict: attr_dict["max_san"] = attr_dict["san"]
+        if "mp" in attr_dict and "max_mp" not in attr_dict: attr_dict["max_mp"] = attr_dict["mp"]
+        
         chara_id = str(uuid.uuid4())
         data = { "id": chara_id, "name": name, "attributes": attr_dict }
+        
         await self._save_character_data(user_id, chara_id, data)
         await self._set_current_character_id(user_id, chara_id)
         yield event.plain_result(f"✅ 人物卡 **{name}** 创建成功并已选中！")
@@ -406,15 +541,19 @@ class DicePlugin(Star):
         if not data:
             yield event.plain_result("⚠️ 当前未选中人物卡，请先使用 `/st create` 或 `/st change`。")
             return
+            
         lines = [f"📜 **{data['name']}** (ID: ...{data['id'][-4:]})"]
         lines.append("-" * 20)
+        
         attrs = data.get("attributes", {})
         sorted_keys = sorted(attrs.keys())
+        
         chunk_size = 3
         for i in range(0, len(sorted_keys), chunk_size):
             chunk = sorted_keys[i:i+chunk_size]
             line_parts = [f"{k}:{attrs[k]}" for k in chunk]
             lines.append("  ".join(line_parts))
+            
         yield event.plain_result("\n".join(lines))
 
     @st_group.command("list")
@@ -423,9 +562,11 @@ class DicePlugin(Star):
         user_id = event.get_sender_id()
         chars = await self._get_all_characters(user_id)
         curr_id = await self._get_current_character_id(user_id)
+        
         if not chars:
             yield event.plain_result("📭 你还没有创建过人物卡。")
             return
+            
         msg = ["📂 **你的人物卡列表**："]
         for name, cid in chars.items():
             mark = "👈 (当前)" if cid == curr_id else ""
@@ -444,72 +585,99 @@ class DicePlugin(Star):
 
     @st_group.command("update")
     async def st_update(self, event: AstrMessageEvent, attr: str, value_expr: str):
+        """更新属性: /st update hp -1d6"""
         user_id = event.get_sender_id()
         data = await self._get_current_character(user_id)
         if not data:
             yield event.plain_result("⚠️ 未选中人物卡。")
             return
+            
         attrs = data["attributes"]
         current_val = attrs.get(attr, 0)
+        
         operator = None
+        calc_part = value_expr
+        
         if value_expr.startswith(("+", "-", "*")):
             operator = value_expr[0]
             calc_part = value_expr[1:]
-        else: calc_part = value_expr 
-        change_val, change_desc = self._safe_parse_dice(calc_part)
+        
+        change_val, change_desc = await self._safe_parse_dice(calc_part)
+        
         if change_val is None:
             yield event.plain_result(f"⚠️ 数值解析错误: {change_desc}")
             return
+            
         old_val = current_val
         new_val = 0
+        
         if operator == "+": new_val = current_val + change_val
         elif operator == "-": new_val = current_val - change_val
         elif operator == "*": new_val = int(current_val * change_val)
-        else: new_val = change_val 
+        else: new_val = change_val
+        
         attrs[attr] = new_val
         await self._save_character_data(user_id, data["id"], data)
+        
         msg = f"📝 **{data['name']}** 的 {attr} 更新:\n"
-        if operator: msg += f"{old_val} {operator} {change_desc} = **{new_val}**"
-        else: msg += f"{old_val} → **{new_val}**"
+        if operator:
+            msg += f"{old_val} {operator} {change_desc} = **{new_val}**"
+        else:
+            msg += f"{old_val} → **{new_val}**"
         yield event.plain_result(msg)
 
     @filter.command("ra")
     async def roll_attr(self, event: AstrMessageEvent, skill: str, value: int = None):
+        """技能检定: /ra 侦查 或 /ra 侦查 60"""
         user_id = event.get_sender_id()
+        data = None
+        
         if value is None:
             data = await self._get_current_character(user_id)
-            if data: value = data["attributes"].get(skill)
+            if data:
+                value = data["attributes"].get(skill)
+                
         if value is None:
             yield event.plain_result(f"⚠️ 未找到技能 **{skill}** 的数值，请手动指定：`/ra {skill} 50`")
             return
+            
         roll_res = random.randint(1, 100)
         check = self._check_result(roll_res, value)
+        
         name_part = f"({data['name']})" if data else ""
         yield event.plain_result(f"🎲 **{skill}** {name_part}\n结果: {roll_res}/{value} \n{check}")
 
     @filter.command("sanc", alias={"san"}) 
     async def san_check(self, event: AstrMessageEvent, expr: str):
+        """SC: /sanc 1/1d3"""
         user_id = event.get_sender_id()
         data = await self._get_current_character(user_id)
         if not data:
              yield event.plain_result("⚠️ 请先加载人物卡 (/st change)")
              return
+             
         san = data["attributes"].get("san")
         if san is None:
              yield event.plain_result("⚠️ 当前人物卡没有 san 属性。")
              return
+             
         if "/" not in expr:
             yield event.plain_result("⚠️ 格式错误，应为：成功扣除/失败扣除 (例: /sanc 1/1d6)")
             return
+            
         success_expr, fail_expr = expr.split("/", 1)
+        
         roll = random.randint(1, 100)
         is_success = roll <= san
+        
         loss_expr = success_expr if is_success else fail_expr
-        loss, loss_desc = self._safe_parse_dice(loss_expr)
+        loss, loss_desc = await self._safe_parse_dice(loss_expr)
         if loss is None: loss = 0 
+        
         new_san = max(0, san - loss)
         data["attributes"]["san"] = new_san
         await self._save_character_data(user_id, data["id"], data)
+        
         res_str = "✅ 成功" if is_success else "❌ 失败"
         msg = (
             f"🧠 **San Check**\n"
@@ -535,14 +703,17 @@ class DicePlugin(Star):
             "恐惧：产生一种特定的恐惧症。",
             "躁狂：产生一种特定的躁狂症。"
         ]
+        
         result = insanities[roll-1]
         extra_msg = ""
+        
         if "恐惧" in result and self.phobias:
             idx = str(random.randint(1, 100))
             extra_msg = f"\n症状: {self.phobias.get(idx, '未知恐惧')}"
         elif "躁狂" in result and self.manias:
             idx = str(random.randint(1, 100))
             extra_msg = f"\n症状: {self.manias.get(idx, '未知躁狂')}"
+            
         yield event.plain_result(f"🤪 **临时疯狂 (1d10={roll})**\n{result}{extra_msg}")
 
     # ================= 帮助指令 =================
@@ -554,27 +725,28 @@ class DicePlugin(Star):
                 {
                     "title": "🎲 基础仪轨 (Basic)",
                     "commands": [
-                        {"syntax": "/r [表达式]", "desc": "普通掷骰，例 /r 1d100"},
-                        {"syntax": "/r [表达式] [值]", "desc": "掷骰并进行检定，例 /r 1d100 50"},
-                        {"syntax": "/rh [表达式]", "desc": "暗骰，结果私聊发送"},
+                        {"syntax": "/r [表达式]", "desc": "普通掷骰，如 /r 1d100"},
+                        {"syntax": "/r [次数]#[表达式]", "desc": "复读掷骰，如 /r 3#1d20 (最多10次)"},
+                        {"syntax": "/r [表达式] [目标]", "desc": "检定模式，如 /r 1d100 50"},
+                        {"syntax": "/rh [表达式]", "desc": "暗骰，结果私聊发送 (支持复读)"},
                     ]
                 },
                 {
                     "title": "📜 调查员档案 (Profile)",
                     "commands": [
-                        {"syntax": "/st create [名] [属性]", "desc": "创建新人物卡"},
-                        {"syntax": "/st show", "desc": "查看当前人物卡详情"},
-                        {"syntax": "/st list", "desc": "列出所有已创建的人物卡"},
+                        {"syntax": "/st create [名] [属性]", "desc": "建卡，如 /st create 调查员 力量50 敏捷60"},
+                        {"syntax": "/st show", "desc": "查看当前选用的人物的属性详情"},
+                        {"syntax": "/st list", "desc": "列出所有已保存的人物卡"},
                         {"syntax": "/st change [名]", "desc": "切换当前使用的人物卡"},
-                        {"syntax": "/st update [属性] [值]", "desc": "修改属性，支持公式"},
+                        {"syntax": "/st update [属性] [值]", "desc": "更新属性(支持公式)，如 /st update hp -1d6"},
                     ]
                 },
                 {
                     "title": "🧠 理智与检定 (Check)",
                     "commands": [
-                        {"syntax": "/ra [技能] [值]", "desc": "技能检定，自动读取当前卡"},
-                        {"syntax": "/sanc [成功]/[失败]", "desc": "San Check，例 /sanc 1/1d3"},
-                        {"syntax": "/ti / .li", "desc": "抽取 临时/总结 疯狂症状"},
+                        {"syntax": "/ra [技能] [值]", "desc": "技能检定，如 /ra 侦查 (自动读卡) 或 /ra 侦查 60"},
+                        {"syntax": "/sanc [成功]/[失败]", "desc": "San Check，自动扣除，如 /sanc 1/1d3"},
+                        {"syntax": "/ti", "desc": "随机抽取临时疯狂症状 (含恐惧/躁狂详情)"},
                     ]
                 }
             ]
