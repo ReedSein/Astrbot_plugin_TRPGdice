@@ -1,4 +1,14 @@
 {
+    "enable_true_random": {
+        "description": "是否启用 Random.org 真随机数生成 (需联网，网络失败自动降级)",
+        "type": "bool",
+        "default": true
+    },
+    "true_random_buffer_size": {
+        "description": "真随机数缓存队列大小 (建议 50-200，越大越能抵抗网络波动)",
+        "type": "int",
+        "default": 100
+    },
     "default_dice_faces": {
         "description": "默认骰子面数 (例如 100)",
         "type": "int",
