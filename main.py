@@ -102,7 +102,7 @@ HELP_HTML_TEMPLATE = """
             background-color: #f3e5ce;
             background-image: radial-gradient(circle at center, #f8f1e0 0%, #f3e5ce 80%, #e6d2b0 100%);
             padding: 60px; border: 12px double #5c4033; border-radius: 6px;
-            box-shadow: 15px 15px 30px rgba(0,0,0,0.4); width: 900px; color: #43302b;
+            box-shadow: 15px 15px 30px rgba(0,0,0,0.4); width: 1000px; color: #43302b;
             position: relative; margin: 0 auto;
         }
         .parchment::before {
@@ -115,10 +115,19 @@ HELP_HTML_TEMPLATE = """
         .section { margin-bottom: 40px; }
         .section-title { font-size: 28px; font-weight: bold; background-color: #5c4033; color: #f3e5ce; padding: 8px 20px; display: inline-block; border-radius: 4px; margin-bottom: 20px; box-shadow: 3px 3px 6px rgba(0,0,0,0.25); }
         .command-list { list-style: none; padding: 0; margin: 0; }
-        .command-item { margin-bottom: 12px; display: flex; align-items: baseline; border-bottom: 2px dashed #d1c0a5; padding-bottom: 8px; }
-        .cmd { font-family: 'Consolas', 'Courier New', monospace; font-weight: bold; color: #8b0000; margin-right: 20px; font-size: 26px; white-space: nowrap; }
-        .desc { font-size: 22px; color: #43302b; line-height: 1.5; }
-        .footer { text-align: center; margin-top: 50px; font-size: 18px; color: #8c7b70; font-style: italic; border-top: 2px solid #a89f91; padding-top: 20px; font-family: 'Times New Roman', serif; }
+        .command-item { margin-bottom: 15px; display: flex; flex-direction: column; border-bottom: 1px dashed #d1c0a5; padding-bottom: 12px; }
+        .cmd-row { display: flex; align-items: baseline; margin-bottom: 6px; }
+        .cmd { font-family: 'Consolas', 'Courier New', monospace; font-weight: bold; color: #8b0000; margin-right: 15px; font-size: 24px; white-space: nowrap; }
+        .desc { font-size: 20px; color: #43302b; font-weight: bold; }
+        .example { font-size: 18px; color: #6d5848; font-style: italic; margin-left: 20px; display: block; }
+        .true-random-badge {
+            text-align: center; margin-top: 30px; padding: 15px;
+            background: rgba(92, 64, 51, 0.1); border-radius: 8px;
+            border: 1px solid #a89f91;
+        }
+        .true-random-title { font-weight: bold; font-size: 20px; color: #8b0000; margin-bottom: 5px; }
+        .true-random-desc { font-size: 16px; color: #5c4033; }
+        .footer { text-align: center; margin-top: 30px; font-size: 18px; color: #8c7b70; font-style: italic; border-top: 2px solid #a89f91; padding-top: 20px; font-family: 'Times New Roman', serif; }
     </style>
 </head>
 <body>
@@ -132,11 +141,27 @@ HELP_HTML_TEMPLATE = """
             <div class="section-title">{{ section.title }}</div>
             <ul class="command-list">
                 {% for cmd in section.commands %}
-                <li class="command-item"><span class="cmd">{{ cmd.syntax }}</span><span class="desc">{{ cmd.desc }}</span></li>
+                <li class="command-item">
+                    <div class="cmd-row">
+                        <span class="cmd">{{ cmd.syntax }}</span>
+                        <span class="desc">{{ cmd.desc }}</span>
+                    </div>
+                    <span class="example">示例: {{ cmd.example }}</span>
+                </li>
                 {% endfor %}
             </ul>
         </div>
         {% endfor %}
+        
+        <div class="true-random-badge">
+            <div class="true-random-title">⚛ True Randomness Powered by Random.org</div>
+            <div class="true-random-desc">
+                本插件核心掷骰逻辑集成了大气噪声真随机源。
+                <br>每一次命运的判定，都来自宇宙深处的混沌涨落，而非伪随机算法的平庸重复。
+                <br>(当网络连接不稳定时，将自动降级至标准伪随机模式)
+            </div>
+        </div>
+
         <div class="footer">Designed for TRPG Players · RosaのTRPG<br>"May the dice be ever in your favor."</div>
     </div>
 </body>
@@ -447,6 +472,12 @@ class DicePlugin(Star):
             msg += f"\n判定 ({target}): {check_res}"
         yield event.plain_result(msg)
 
+    @filter.command("rd")
+    async def roll_d100(self, event: AstrMessageEvent):
+        """1d100 快捷掷骰"""
+        roll = await self._roll_single(100)
+        yield event.plain_result(f"{event.get_sender_name()} 进行了 1d100 投掷: {roll}")
+
     @filter.command("rh", alias={"暗骰"})
     async def roll_hidden(self, event: AstrMessageEvent, expression: str = None):
         """私聊发送掷骰结果 (支持复读)"""
@@ -627,25 +658,79 @@ class DicePlugin(Star):
         yield event.plain_result(msg)
 
     @filter.command("ra")
-    async def roll_attr(self, event: AstrMessageEvent, skill: str, value: int = None):
-        """技能检定: /ra 侦查 或 /ra 侦查 60"""
-        user_id = event.get_sender_id()
-        data = None
+    async def roll_check(self, event: AstrMessageEvent, attr_or_target: str = None, target_val: int = None):
+        """技能检定 /ra [技能名] [目标值] 或 /ra [目标值]"""
+        user_name = event.get_sender_name()
         
-        if value is None:
-            data = await self._get_current_character(user_id)
-            if data:
-                value = data["attributes"].get(skill)
-                
-        if value is None:
-            yield event.plain_result(f"⚠️ 未找到技能 **{skill}** 的数值，请手动指定：`/ra {skill} 50`")
+        # 1. 处理无参数情况: 仅投掷 1d100
+        if attr_or_target is None:
+            roll = await self._roll_single(100)
+            yield event.plain_result(f"{user_name} 进行了 1d100 投掷: {roll}")
             return
-            
-        roll_res = random.randint(1, 100)
-        check = self._check_result(roll_res, value)
+
+        target = None
+        skill_name = "检定"
+
+        # 2. 尝试解析参数
+        # 情况 A: /ra 50 (单参数且为数字)
+        if attr_or_target.isdigit() and target_val is None:
+            target = int(attr_or_target)
+            skill_name = "数值"
         
-        name_part = f"({data['name']})" if data else ""
-        yield event.plain_result(f"🎲 **{skill}** {name_part}\n结果: {roll_res}/{value} \n{check}")
+        # 情况 B: /ra 侦查 (单参数且为属性名)
+        elif target_val is None:
+            skill_name = attr_or_target
+            card = self._get_current_card(event)
+            if not card:
+                yield event.plain_result(f"错误: 当前未选中人物卡，请使用 /ra [属性] [数值] 或直接输入数值。")
+                return
+            target = card.get(skill_name)
+            if target is None:
+                yield event.plain_result(f"错误: 人物卡中未找到属性 '{skill_name}'")
+                return
+        
+        # 情况 C: /ra 侦查 60 (双参数)
+        else:
+            skill_name = attr_or_target
+            target = target_val
+
+        # 3. 执行投掷
+        roll = await self._roll_single(100)
+        
+        # 4. 判定结果
+        res_type = ""
+        if roll == 1: res_type = "critical_success"
+        elif roll == 100: res_type = "fumble"
+        elif roll <= 5 and roll <= target // 5: res_type = "critical_success" # 兼容规则：1-5且小于1/5
+        elif roll > 95 and target < 50: res_type = "fumble" # 目标值<50时, 96-100为大失败
+        elif roll <= target // 5: res_type = "extreme_success"
+        elif roll <= target // 2: res_type = "hard_success"
+        elif roll <= target: res_type = "success"
+        else: res_type = "failure"
+
+        # 修正大失败/大成功的边界逻辑 (简化版)
+        if roll == 1: res_type = "critical_success"
+        if roll == 100: res_type = "fumble"
+
+        # 获取描述
+        res_map = {
+            "critical_success": "大成功",
+            "extreme_success": "极难成功",
+            "hard_success": "困难成功",
+            "success": "成功",
+            "failure": "失败",
+            "fumble": "大失败"
+        }
+        res_text = res_map.get(res_type, "未知")
+        
+        # 插入风味文本
+        flavor = ""
+        if self.config.get("enable_flavor_text", True):
+            flavor_list = self.config.get(f"flavor_{res_type}", [])
+            if flavor_list:
+                flavor = f"\n「{random.choice(flavor_list)}」"
+
+        yield event.plain_result(f"{user_name} 进行了 {skill_name} 检定: 1d100={roll}/{target} {res_text}{flavor}")
 
     @filter.command("sanc", alias={"san"}) 
     async def san_check(self, event: AstrMessageEvent, expr: str):
@@ -725,28 +810,31 @@ class DicePlugin(Star):
                 {
                     "title": "🎲 基础仪轨 (Basic)",
                     "commands": [
-                        {"syntax": "/r [表达式]", "desc": "普通掷骰，如 /r 1d100"},
-                        {"syntax": "/r [次数]#[表达式]", "desc": "复读掷骰，如 /r 3#1d20 (最多10次)"},
-                        {"syntax": "/r [表达式] [目标]", "desc": "检定模式，如 /r 1d100 50"},
-                        {"syntax": "/rh [表达式]", "desc": "暗骰，结果私聊发送 (支持复读)"},
+                        {"syntax": "/rd", "desc": "快捷进行一次 1d100 投掷", "example": "/rd (直接出结果)"},
+                        {"syntax": "/r [表达式]", "desc": "投掷指定骰子表达式", "example": "/r 2d10+5"},
+                        {"syntax": "/r [次数]#[表达式]", "desc": "重复投掷多次表达式", "example": "/r 3#4d6k3 (投3次，每次4d6取前3)"},
+                        {"syntax": "/r [表达式] [判定值]", "desc": "投掷并与目标值对比判定", "example": "/r 1d100 60"},
+                        {"syntax": "/rh [表达式]", "desc": "暗骰模式，结果私聊发送给指令者", "example": "/rh 1d100 (仅你自己可见)"},
                     ]
                 },
                 {
                     "title": "📜 调查员档案 (Profile)",
                     "commands": [
-                        {"syntax": "/st create [名] [属性]", "desc": "建卡，如 /st create 调查员 力量50 敏捷60"},
-                        {"syntax": "/st show", "desc": "查看当前选用的人物的属性详情"},
-                        {"syntax": "/st list", "desc": "列出所有已保存的人物卡"},
-                        {"syntax": "/st change [名]", "desc": "切换当前使用的人物卡"},
-                        {"syntax": "/st update [属性] [值]", "desc": "更新属性(支持公式)，如 /st update hp -1d6"},
+                        {"syntax": "/st create [名] [属性]", "desc": "创建一张新的人物卡", "example": "/st create 洛萨 力量60 敏捷70 智力80"},
+                        {"syntax": "/st show", "desc": "查看当前选中的人物卡详情", "example": "/st show"},
+                        {"syntax": "/st list", "desc": "查看所有已保存的人物卡", "example": "/st list"},
+                        {"syntax": "/st change [名]", "desc": "切换当前激活的人物卡", "example": "/st change 洛萨"},
+                        {"syntax": "/st update [属性] [值]", "desc": "修改当前卡属性 (支持加减公式)", "example": "/st update hp -1d3 (扣除1d3点血量)"},
                     ]
                 },
                 {
                     "title": "🧠 理智与检定 (Check)",
                     "commands": [
-                        {"syntax": "/ra [技能] [值]", "desc": "技能检定，如 /ra 侦查 (自动读卡) 或 /ra 侦查 60"},
-                        {"syntax": "/sanc [成功]/[失败]", "desc": "San Check，自动扣除，如 /sanc 1/1d3"},
-                        {"syntax": "/ti", "desc": "随机抽取临时疯狂症状 (含恐惧/躁狂详情)"},
+                        {"syntax": "/ra [数值]", "desc": "以指定数值为目标进行快捷检定", "example": "/ra 60 (以60为目标进行检定)"},
+                        {"syntax": "/ra [属性名]", "desc": "自动读取当前卡属性进行检定", "example": "/ra 侦查 (自动读取侦查数值)"},
+                        {"syntax": "/ra [属性] [数值]", "desc": "指定属性和数值进行检定", "example": "/ra 射击 80"},
+                        {"syntax": "/sanc [成功]/[失败]", "desc": "San Check，自动计算并扣除理智", "example": "/sanc 1/1d6 (成功扣1，失败扣1d6)"},
+                        {"syntax": "/ti", "desc": "抽取临时疯狂症状 (含恐惧/躁狂)", "example": "/ti"},
                     ]
                 }
             ]
