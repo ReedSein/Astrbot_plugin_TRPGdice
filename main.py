@@ -473,10 +473,23 @@ class DicePlugin(Star):
         yield event.plain_result(msg)
 
     @filter.command("rd")
-    async def roll_d100(self, event: AstrMessageEvent):
-        """1d100 快捷掷骰"""
-        roll = await self._roll_single(100)
-        yield event.plain_result(f"{event.get_sender_name()} 进行了 1d100 投掷: {roll}")
+    async def roll_d100(self, event: AstrMessageEvent, faces: Union[int, str] = 100):
+        """快捷掷骰 /rd [面数] (默认100)"""
+        # 参数清洗与类型安全处理
+        target_faces = 100
+        try:
+            if faces is not None:
+                target_faces = int(faces)
+        except ValueError:
+            yield event.plain_result("错误: 面数必须是有效的整数")
+            return
+
+        if target_faces <= 0:
+            yield event.plain_result("错误: 面数必须大于0")
+            return
+
+        roll = await self._roll_single(target_faces)
+        yield event.plain_result(f"{event.get_sender_name()} 进行了 1d{target_faces} 投掷: {roll}")
 
     @filter.command("rh", alias={"暗骰"})
     async def roll_hidden(self, event: AstrMessageEvent, expression: str = None):
@@ -658,7 +671,7 @@ class DicePlugin(Star):
         yield event.plain_result(msg)
 
     @filter.command("ra")
-    async def roll_check(self, event: AstrMessageEvent, attr_or_target: str = None, target_val: int = None):
+    async def roll_check(self, event: AstrMessageEvent, attr_or_target: Union[str, int] = None, target_val: int = None):
         """技能检定 /ra [技能名] [目标值] 或 /ra [目标值]"""
         user_name = event.get_sender_name()
         
@@ -673,13 +686,16 @@ class DicePlugin(Star):
 
         # 2. 尝试解析参数
         # 情况 A: /ra 50 (单参数且为数字)
-        if attr_or_target.isdigit() and target_val is None:
+        # AstrBot 可能自动将数字字符串转为 int
+        is_direct_number = isinstance(attr_or_target, int) or (isinstance(attr_or_target, str) and attr_or_target.isdigit())
+
+        if is_direct_number and target_val is None:
             target = int(attr_or_target)
             skill_name = "数值"
         
         # 情况 B: /ra 侦查 (单参数且为属性名)
         elif target_val is None:
-            skill_name = attr_or_target
+            skill_name = str(attr_or_target) # 确保是字符串
             card = self._get_current_card(event)
             if not card:
                 yield event.plain_result(f"错误: 当前未选中人物卡，请使用 /ra [属性] [数值] 或直接输入数值。")
@@ -691,7 +707,7 @@ class DicePlugin(Star):
         
         # 情况 C: /ra 侦查 60 (双参数)
         else:
-            skill_name = attr_or_target
+            skill_name = str(attr_or_target)
             target = target_val
 
         # 3. 执行投掷
@@ -810,7 +826,7 @@ class DicePlugin(Star):
                 {
                     "title": "🎲 基础仪轨 (Basic)",
                     "commands": [
-                        {"syntax": "/rd", "desc": "快捷进行一次 1d100 投掷", "example": "/rd (直接出结果)"},
+                        {"syntax": "/rd [面数]", "desc": "快捷单次掷骰 (默认d100)", "example": "/rd 或 /rd 20 (即投1d20)"},
                         {"syntax": "/r [表达式]", "desc": "投掷指定骰子表达式", "example": "/r 2d10+5"},
                         {"syntax": "/r [次数]#[表达式]", "desc": "重复投掷多次表达式", "example": "/r 3#4d6k3 (投3次，每次4d6取前3)"},
                         {"syntax": "/r [表达式] [判定值]", "desc": "投掷并与目标值对比判定", "example": "/r 1d100 60"},
