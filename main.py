@@ -373,104 +373,69 @@ class DicePlugin(Star):
             
         return total, f"{expr_str} = {total}"
 
-    def _get_flavor_text(self, result_type: str) -> str:
-        if not self.config.get("enable_flavor_text", True): return ""
-        
-        key_map = {
-            "🎉 大成功": "flavor_critical_success",
-            "✨ 极难成功": "flavor_extreme_success",
-            "✔ 困难成功": "flavor_hard_success",
-            "✅ 成功": "flavor_success",
-            "❌ 失败": "flavor_failure",
-            "💀 大失败": "flavor_fumble"
-        }
-        
-        config_key = key_map.get(result_type)
-        if not config_key: return ""
-        
-        texts = self.config.get(config_key, [])
-        if not texts: return ""
-        
-        return random.choice(texts)
-
-    def _check_result(self, total: int, target: int) -> str:
-        if target <= 0: return "未知"
-        
-        result_str = ""
-        if total == 1:
-            result_str = "🎉 大成功"
-        elif total <= target // 5:
-            result_str = "✨ 极难成功"
-        elif total <= target // 2:
-            result_str = "✔ 困难成功"
-        elif total <= target:
-            result_str = "✅ 成功"
-        elif total == 100:
-            result_str = "💀 大失败"
-        elif total >= 96 and target < 50:
-            result_str = "💀 大失败"
-        else:
-            result_str = "❌ 失败"
-            
-        flavor = self._get_flavor_text(result_str)
-        if flavor:
-            return f"{result_str}\n> {flavor}"
-        return result_str
-
     # ================= 指令处理 Handlers =================
 
     @filter.command("roll", alias={"r", "掷骰"})
     async def roll_dice(self, event: AstrMessageEvent, expression: str = None, target: int = None):
         """普通掷骰，支持 /r 1d100 50 或 /r 3#1d20"""
+        user_name = event.get_sender_name()
         default_faces = self.config.get("default_dice_faces", 100)
         if expression is None:
             expression = f"1d{default_faces}"
         
+        # 统一的判定和风味文本获取逻辑
+        async def get_check_message(roll, target_val):
+            result_data = self._get_check_result(roll, target_val)
+            flavor = ""
+            if self.config.get("enable_flavor_text", True):
+                raw_flavor = self.config.get(f"flavor_{result_data['key']}", [])
+                flavor_pool = [line.strip() for line in (raw_flavor if isinstance(raw_flavor, list) else str(raw_flavor).split('\n')) if line.strip()]
+                if flavor_pool:
+                    flavor = f"\n「{random.choice(flavor_pool)}」"
+            return f"{result_data['emoji']} {result_data['desc']}{flavor}"
+
+        # 复读模式
         if "#" in expression:
             try:
                 parts = expression.split("#", 1)
-                count_str = parts[0].strip()
+                count = int(parts[0].strip() or 1)
                 expr_part = parts[1].strip()
-                count = int(count_str) if count_str else 1
                 
-                if count > 10:
-                    yield event.plain_result("⚠️ 既然是复读，那就不要超过 10 次哦。 সন")
-                    return
-                if count < 1:
-                    yield event.plain_result("⚠️ 至少要掷 1 次吧？")
+                if not (1 <= count <= 10):
+                    yield event.plain_result("⚠️ 复读次数应在 1-10 之间。")
                     return
                 
-                results = []
+                lines = []
                 for i in range(count):
                     total, desc = await self._safe_parse_dice(expr_part)
                     if total is None:
                         yield event.plain_result(f"⚠️ 第 {i+1} 次解析失败: {desc}")
                         return
                     
-                    line = f"🎲{i+1}: {desc}"
+                    line = f"🎲 {i+1}: {desc}"
                     if target is not None:
-                        check_res = self._check_result(total, target)
-                        simple_check = check_res.split('\n')[0]
-                        line += f" ({simple_check})"
-                    results.append(line)
+                        check_msg = await get_check_message(total, target)
+                        line += f" 判定({target}): {check_msg.split(' ')[0]}" # 复读模式只显示 emoji
+                    lines.append(line)
                 
-                yield event.plain_result("\n".join(results))
+                yield event.plain_result("\n".join(lines))
                 return
 
-            except ValueError:
-                yield event.plain_result("⚠️ 复读格式错误，应为 3#1d20")
+            except (ValueError, IndexError):
+                yield event.plain_result("⚠️ 复读格式错误，应为 `次数#表达式`，例如 `3#1d20`。")
                 return
-        
+
+        # 普通模式
         total, desc = await self._safe_parse_dice(expression)
         if total is None:
             yield event.plain_result(f"⚠️ {desc}")
             return
             
-        msg = f"🎲 掷骰: {expression}\n结果: {desc}"
         if target is not None:
-            check_res = self._check_result(total, target)
-            msg += f"\n判定 ({target}): {check_res}"
-        yield event.plain_result(msg)
+            check_msg = await get_check_message(total, target)
+            yield event.plain_result(f"🎲 {user_name} 进行了 {expression} 检定: {desc} / {target}\n{check_msg}")
+        else:
+            yield event.plain_result(f"🎲 {user_name} 掷出了 {expression}: {desc}")
 
     @filter.command("rd")
     async def roll_d100(self, event: AstrMessageEvent, faces: Union[int, str] = 100):
@@ -489,7 +454,7 @@ class DicePlugin(Star):
             return
 
         roll = await self._roll_single(target_faces)
-        yield event.plain_result(f"{event.get_sender_name()} 进行了 1d{target_faces} 投掷: {roll}")
+        yield event.plain_result(f"🎲 {event.get_sender_name()} 进行了 1d{target_faces} 投掷: {roll}")
 
     @filter.command("rh", alias={"暗骰"})
     async def roll_hidden(self, event: AstrMessageEvent, expression: str = None):
@@ -670,6 +635,49 @@ class DicePlugin(Star):
             msg += f"{old_val} → **{new_val}**"
         yield event.plain_result(msg)
 
+    def _get_check_result(self, roll: int, target: int) -> dict:
+        """
+        统一判定逻辑 (CoC 7th)
+        返回: {"key": str, "desc": str, "emoji": str}
+        """
+        res_key = "failure"
+        emoji = "❌"
+        desc = "失败"
+
+        # 1. 判定 Key
+        if roll == 1:
+            res_key = "critical_success"
+        elif roll == 100:
+            res_key = "fumble"
+        elif target < 50 and roll >= 96:
+            res_key = "fumble"
+        elif roll <= target // 5:
+            res_key = "extreme_success"
+        elif roll <= target // 2:
+            res_key = "hard_success"
+        elif roll <= target:
+            res_key = "success"
+        else:
+            res_key = "failure"
+
+        # 2. 映射 Emoji 和 中文
+        mapping = {
+            "critical_success": ("大成功", "🎉"),
+            "extreme_success": ("极难成功", "🌟"),
+            "hard_success": ("困难成功", "⭐"),
+            "success": ("成功", "✅"),
+            "failure": ("失败", "❌"),
+            "fumble": ("大失败", "💀")
+        }
+        
+        desc, emoji = mapping.get(res_key, ("未知", "❓"))
+        
+        return {
+            "key": res_key,
+            "desc": desc,
+            "emoji": emoji
+        }
+
     @filter.command("ra")
     async def roll_check(self, event: AstrMessageEvent, attr_or_target: Union[str, int] = None, target_val: int = None):
         """技能检定 /ra [技能名] [目标值] 或 /ra [目标值]"""
@@ -678,24 +686,20 @@ class DicePlugin(Star):
         # 1. 处理无参数情况: 仅投掷 1d100
         if attr_or_target is None:
             roll = await self._roll_single(100)
-            yield event.plain_result(f"{user_name} 进行了 1d100 投掷: {roll}")
+            yield event.plain_result(f"🎲 {user_name} 进行了 1d100 投掷: {roll}")
             return
 
         target = None
         skill_name = "检定"
 
         # 2. 尝试解析参数
-        # 情况 A: /ra 50 (单参数且为数字)
-        # AstrBot 可能自动将数字字符串转为 int
         is_direct_number = isinstance(attr_or_target, int) or (isinstance(attr_or_target, str) and attr_or_target.isdigit())
 
         if is_direct_number and target_val is None:
             target = int(attr_or_target)
             skill_name = "数值"
-        
-        # 情况 B: /ra 侦查 (单参数且为属性名)
         elif target_val is None:
-            skill_name = str(attr_or_target) # 确保是字符串
+            skill_name = str(attr_or_target)
             card = self._get_current_card(event)
             if not card:
                 yield event.plain_result(f"错误: 当前未选中人物卡，请使用 /ra [属性] [数值] 或直接输入数值。")
@@ -704,8 +708,6 @@ class DicePlugin(Star):
             if target is None:
                 yield event.plain_result(f"错误: 人物卡中未找到属性 '{skill_name}'")
                 return
-        
-        # 情况 C: /ra 侦查 60 (双参数)
         else:
             skill_name = str(attr_or_target)
             target = target_val
@@ -713,40 +715,23 @@ class DicePlugin(Star):
         # 3. 执行投掷
         roll = await self._roll_single(100)
         
-        # 4. 判定结果
-        res_type = ""
-        if roll == 1: res_type = "critical_success"
-        elif roll == 100: res_type = "fumble"
-        elif roll <= 5 and roll <= target // 5: res_type = "critical_success" # 兼容规则：1-5且小于1/5
-        elif roll > 95 and target < 50: res_type = "fumble" # 目标值<50时, 96-100为大失败
-        elif roll <= target // 5: res_type = "extreme_success"
-        elif roll <= target // 2: res_type = "hard_success"
-        elif roll <= target: res_type = "success"
-        else: res_type = "failure"
-
-        # 修正大失败/大成功的边界逻辑 (简化版)
-        if roll == 1: res_type = "critical_success"
-        if roll == 100: res_type = "fumble"
-
-        # 获取描述
-        res_map = {
-            "critical_success": "大成功",
-            "extreme_success": "极难成功",
-            "hard_success": "困难成功",
-            "success": "成功",
-            "failure": "失败",
-            "fumble": "大失败"
-        }
-        res_text = res_map.get(res_type, "未知")
+        # 4. 统一判定
+        result_data = self._get_check_result(roll, target)
         
-        # 插入风味文本
+        # 5. 获取风味文本
         flavor = ""
         if self.config.get("enable_flavor_text", True):
-            flavor_list = self.config.get(f"flavor_{res_type}", [])
-            if flavor_list:
-                flavor = f"\n「{random.choice(flavor_list)}」"
+            raw_flavor = self.config.get(f"flavor_{result_data['key']}", [])
+            flavor_pool = []
+            if isinstance(raw_flavor, list):
+                flavor_pool = raw_flavor
+            elif isinstance(raw_flavor, str):
+                flavor_pool = [line.strip() for line in raw_flavor.split("\n") if line.strip()]
+            
+            if flavor_pool:
+                flavor = f"\n「{random.choice(flavor_pool)}」"
 
-        yield event.plain_result(f"{user_name} 进行了 {skill_name} 检定: 1d100={roll}/{target} {res_text}{flavor}")
+        yield event.plain_result(f"🎲 {user_name} 进行了 {skill_name} 检定: 1d100={roll}/{target} {result_data['emoji']} {result_data['desc']}{flavor}")
 
     @filter.command("sanc", alias={"san"}) 
     async def san_check(self, event: AstrMessageEvent, expr: str):
